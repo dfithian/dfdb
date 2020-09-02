@@ -22,3 +22,17 @@ dfdb > select (string, int,) foo;
 
 dfdb > :q
 ```
+
+## Features
+
+- [x] create table
+- [x] insert
+- [x] select
+- [ ] update
+- [ ] nullable/non-nullable columns
+- [x] primitive types
+- [ ] persist to disk
+- [ ] primary keys
+- [ ] foreign keys
+- [ ] indexes
+- [ ] query planning
