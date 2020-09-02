@@ -21,33 +21,39 @@ getTableOrFail tableName = maybe (throwError (DFDB.Types.StatementFailureCodeSyn
 
 execute :: MonadState DFDB.Types.Database m => DFDB.Types.Statement -> m DFDB.Types.StatementResult
 execute = \ case
+  -- execute a select
   DFDB.Types.StatementSelect cols tableName -> do
     result <- runExceptT $ do
       table <- getTableOrFail tableName
-      columnIndices <- for cols $ \ col -> case elemIndex col (toListOf (DFDB.Types.tableColumns . each . DFDB.Types.columnDefinitionName) table) of
-        Nothing -> throwError $ DFDB.Types.StatementFailureCodeSyntaxError $ "Column " <> DFDB.Types.unColumn col <> " does not exist in " <> DFDB.Types.unTableName tableName
+      columnIndices <- for cols $ \ col -> case elemIndex col (toListOf (DFDB.Types.tableDefinition . each . DFDB.Types.columnDefinitionName) table) of
+        Nothing -> throwError $ DFDB.Types.StatementFailureCodeSyntaxError $ "Column " <> DFDB.Types.unColumnName col <> " does not exist in " <> DFDB.Types.unTableName tableName
         Just c -> pure c
       let rows = flip map (view DFDB.Types.tableRows table) $ \ (DFDB.Types.Row atoms) -> flip map columnIndices $ \ columnIndex -> atoms !! columnIndex
       pure . DFDB.Types.StatementResultSuccess . DFDB.Types.Output . unlines . map (decodeUtf8 . toStrict . encode) $ rows
     case result of
       Left code -> pure $ DFDB.Types.StatementResultFailure code
       Right x -> pure x
+
+  -- execute an insert
   DFDB.Types.StatementInsert row tableName -> do
     result <- runExceptT $ do
       table <- getTableOrFail tableName
-      case length (DFDB.Types.unRow row) == length (view DFDB.Types.tableColumns table) of
+      let columnDefinitions = view DFDB.Types.tableDefinition table
+      case length (DFDB.Types.unRow row) == length columnDefinitions of
         False -> throwError $ DFDB.Types.StatementFailureCodeSyntaxError "Wrong number of columns"
         True -> do
-          for_ (zip (DFDB.Types.unRow row) (view DFDB.Types.tableColumns table)) $ \ (atom, columnDefinition) ->
+          for_ (zip (DFDB.Types.unRow row) columnDefinitions) $ \ (atom, columnDefinition) ->
             let atomType = view DFDB.Types.columnDefinitionType columnDefinition
                 column = view DFDB.Types.columnDefinitionName columnDefinition
             in case DFDB.Types.toAtomType atom == atomType of
               True -> pure ()
-              False -> throwError $ DFDB.Types.StatementFailureCodeSyntaxError $ "column " <> DFDB.Types.unColumn column <> " (" <> tshow atom <> ") is not a " <> tshow atomType
+              False -> throwError $ DFDB.Types.StatementFailureCodeSyntaxError $ "Column " <> DFDB.Types.unColumnName column <> " (" <> tshow atom <> ") is not a " <> tshow atomType
           assign (DFDB.Types.databaseTables . at tableName . _Just) (over DFDB.Types.tableRows (row:) table)
     case result of
       Left code -> pure $ DFDB.Types.StatementResultFailure code
       Right () -> pure $ DFDB.Types.StatementResultSuccess $ DFDB.Types.Output "INSERT 1"
+
+  -- execute a create table
   DFDB.Types.StatementCreate tableName cols -> do
     use (DFDB.Types.databaseTables . at tableName) >>= \ case
       Nothing -> do

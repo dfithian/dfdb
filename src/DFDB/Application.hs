@@ -38,12 +38,20 @@ dfdbRepl = do
     input <- DFDB.Types.Command <$> liftIO getLine
     when (input `elem` quitCommands) $ liftIO exitSuccess
     case runParser parseStatement input of
+
+      -- failed to parse command
       DFDB.Types.CommandOutputFailure code -> case code of
         DFDB.Types.CommandFailureCodeParser err -> do
           putStrLn $ "Unrecognized command " <> DFDB.Types.unCommand input <> " (" <> err <> ")"
           helpText
+
+      -- successfully parsed command
       DFDB.Types.CommandOutputSuccess parsedStatement -> case parsedStatement of
+
+        -- some repl command
         DFDB.Types.ParsedStatementHelp -> helpText
+
+        -- some sql command
         DFDB.Types.ParsedStatement statement -> execute statement >>= \ case
           DFDB.Types.StatementResultSuccess output -> putStrLn $ DFDB.Types.unOutput output
           DFDB.Types.StatementResultFailure code -> case code of

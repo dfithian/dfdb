@@ -59,11 +59,11 @@ list p = (spaces *> Atto.string "(" *> Atto.many' (p <* Atto.string ",")) <* Att
 row :: Atto.Parser DFDB.Types.Row
 row = DFDB.Types.Row <$> list atom
 
-column :: Atto.Parser DFDB.Types.Column
-column = DFDB.Types.Column . decodeUtf8 <$> alphaOrUnderscore
+columnName :: Atto.Parser DFDB.Types.ColumnName
+columnName = DFDB.Types.ColumnName . decodeUtf8 <$> alphaOrUnderscore
 
-columns :: Atto.Parser [DFDB.Types.Column]
-columns = list column
+columnNames :: Atto.Parser [DFDB.Types.ColumnName]
+columnNames = list columnName
 
 atomType :: Atto.Parser DFDB.Types.AtomType
 atomType =
@@ -72,7 +72,7 @@ atomType =
     <|> (DFDB.Types.AtomTypeBool <$ Atto.string "bool")
 
 columnDefinition :: Atto.Parser DFDB.Types.ColumnDefinition
-columnDefinition = DFDB.Types.ColumnDefinition <$> column <*> ((spaces *> atomType) <* spaces)
+columnDefinition = DFDB.Types.ColumnDefinition <$> columnName <*> ((spaces *> atomType) <* spaces)
 
 columnDefinitions :: Atto.Parser [DFDB.Types.ColumnDefinition]
 columnDefinitions = list columnDefinition
@@ -84,7 +84,7 @@ parseStatement :: Atto.Parser DFDB.Types.ParsedStatement
 parseStatement =
   (DFDB.Types.ParsedStatementHelp <$ keyword "help")
     <|> ( DFDB.Types.ParsedStatement
-            <$> ( (DFDB.Types.StatementSelect <$ keyword "select" <*> columns <*> table <* spaces <* Atto.string ";" <* Atto.takeByteString)
+            <$> ( (DFDB.Types.StatementSelect <$ keyword "select" <*> columnNames <*> table <* spaces <* Atto.string ";" <* Atto.takeByteString)
                      <|> (DFDB.Types.StatementInsert <$ keyword "insert" <*> row <*> table <* spaces <* Atto.string ";" <* Atto.takeByteString)
                      <|> (DFDB.Types.StatementCreate <$ keyword "create table" <*> table <*> columnDefinitions <* spaces <* Atto.string ";" <* Atto.takeByteString)
                 )

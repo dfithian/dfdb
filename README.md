@@ -16,7 +16,7 @@ CREATE TABLE
 dfdb > insert ('string', 1, true,) foo;
 INSERT 1
 dfdb > insert (1, 2, 3,) foo;
-column string(1) is not a string
+Column string(1) is not a string
 dfdb > select (string, int,) foo;
 ["string",1]
 
