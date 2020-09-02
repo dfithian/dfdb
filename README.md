@@ -32,6 +32,10 @@ dfdb > select (string, int,) foo;
 dfdb > :q
 ```
 
+## Internals
+
+* If you want to start from scratch, `rm -rf .dfdb`
+
 ## Features
 
 - [x] create table
