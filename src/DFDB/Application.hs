@@ -1,24 +1,26 @@
 module DFDB.Application where
 
 import ClassyPrelude
+import Control.Monad.State (execStateT)
 import System.Exit (exitSuccess)
 
+import DFDB.Database (emptyDatabase, execute)
 import DFDB.Statement (parseStatement, runParser)
 import qualified DFDB.Types
 
-greeting :: IO ()
+greeting :: MonadIO m => m ()
 greeting = putStrLn . unlines $
   [ "Welcome to DFDB"
   ]
 
-helpText :: IO ()
+helpText :: MonadIO m => m ()
 helpText = putStrLn . unlines $
   [ "Enter \"help\" to get this text"
   , "  Quit commands: " <> intercalate ", " (DFDB.Types.unCommand <$> quitCommands)
   ]
 
-replPrompt :: IO ()
-replPrompt = putStr "dfdb > " >> hFlush stdout
+replPrompt :: MonadIO m => m ()
+replPrompt = putStr "dfdb > " >> liftIO (hFlush stdout)
 
 quitCommands :: [DFDB.Types.Command]
 quitCommands =
@@ -31,15 +33,18 @@ dfdbRepl :: IO ()
 dfdbRepl = do
   greeting
   helpText
-  forever $ do
+  void . flip execStateT emptyDatabase . forever $ do
     replPrompt
-    input <- DFDB.Types.Command <$> getLine
-    when (input `elem` quitCommands) exitSuccess
+    input <- DFDB.Types.Command <$> liftIO getLine
+    when (input `elem` quitCommands) $ liftIO exitSuccess
     case runParser parseStatement input of
       DFDB.Types.CommandOutputFailure code -> case code of
-        DFDB.Types.FailureCodeParser err -> do
+        DFDB.Types.CommandFailureCodeParser err -> do
           putStrLn $ "Unrecognized command " <> DFDB.Types.unCommand input <> " (" <> err <> ")"
           helpText
-      DFDB.Types.CommandOutputSuccess statement -> case statement of
-        DFDB.Types.StatementHelp -> helpText
-        other -> putStrLn $ "Got statement " <> tshow other
+      DFDB.Types.CommandOutputSuccess parsedStatement -> case parsedStatement of
+        DFDB.Types.ParsedStatementHelp -> helpText
+        DFDB.Types.ParsedStatement statement -> execute statement >>= \ case
+          DFDB.Types.StatementResultSuccess output -> putStrLn $ DFDB.Types.unOutput output
+          DFDB.Types.StatementResultFailure code -> case code of
+            DFDB.Types.StatementFailureCodeSyntaxError err -> putStrLn err

@@ -48,9 +48,13 @@ default-extensions:
   - ViewPatterns
 
 dependencies:
+  - aeson
   - attoparsec
   - base
+  - bytestring
   - classy-prelude
+  - lens
+  - mtl
 
 library:
   source-dirs:
