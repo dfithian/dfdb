@@ -53,6 +53,7 @@ dependencies:
   - base
   - bytestring
   - classy-prelude
+  - directory
   - lens
   - mtl
 

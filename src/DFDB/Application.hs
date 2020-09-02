@@ -1,10 +1,11 @@
 module DFDB.Application where
 
 import ClassyPrelude
-import Control.Monad.State (execStateT)
+import Control.Monad.State (execStateT, get)
 import System.Exit (exitSuccess)
 
 import DFDB.Database (emptyDatabase, execute)
+import DFDB.Persist (dbDir, loadDatabase, saveDatabase)
 import DFDB.Statement (parseStatement, runParser)
 import qualified DFDB.Types
 
@@ -33,10 +34,21 @@ dfdbRepl :: IO ()
 dfdbRepl = do
   greeting
   helpText
-  void . flip execStateT emptyDatabase . forever $ do
+
+  db <- loadDatabase dbDir >>= \ case
+    Nothing -> pure emptyDatabase
+    Just (Right d) -> pure d
+    Just (Left err) -> do
+      putStrLn $ "Couldn't load database (" <> pack err <> "), creating a new one"
+      pure emptyDatabase
+
+  void . flip execStateT db . forever $ do
     replPrompt
     input <- DFDB.Types.Command <$> liftIO getLine
-    when (input `elem` quitCommands) $ liftIO exitSuccess
+    when (input `elem` quitCommands) $ do
+      currentDb <- get
+      saveDatabase dbDir currentDb
+      liftIO exitSuccess
     case runParser parseStatement input of
 
       -- failed to parse command

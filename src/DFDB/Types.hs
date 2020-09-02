@@ -3,7 +3,10 @@ module DFDB.Types where
 import ClassyPrelude
 import Control.Lens.TH (makeLenses)
 import Control.Monad (fail)
-import Data.Aeson (Value(Bool, Number, String), FromJSON, ToJSON, parseJSON, toJSON)
+import Data.Aeson
+  ( Value(Bool, Number, String), (.:), (.=), FromJSON, FromJSONKey, ToJSON, ToJSONKey, object
+  , parseJSON, toJSON, withObject
+  )
 
 -- |User input.
 newtype Command = Command { unCommand :: Text }
@@ -58,7 +61,7 @@ newtype Row = Row { unRow :: [Atom] }
 
 -- |The name of a column in a table, used for querying.
 newtype ColumnName = ColumnName { unColumnName :: Text }
-  deriving (Eq, Ord, Show)
+  deriving (Eq, Ord, Show, ToJSON, FromJSON)
 
 -- |Column definition in a table.
 data ColumnDefinition = ColumnDefinition
@@ -71,7 +74,7 @@ data ColumnDefinition = ColumnDefinition
 
 -- |Name of a table, used for creating/querying/inserting.
 newtype TableName = TableName { unTableName :: Text }
-  deriving (Eq, Ord, Show)
+  deriving (Eq, Ord, Show, ToJSON, FromJSON, ToJSONKey, FromJSONKey)
 
 -- |A table, including its name, definition, and data.
 data Table = Table
@@ -116,6 +119,19 @@ makeLenses ''ColumnDefinition
 makeLenses ''Table
 makeLenses ''Database
 
+instance ToJSON AtomType where
+  toJSON = \ case
+    AtomTypeInt -> String "int"
+    AtomTypeString -> String "string"
+    AtomTypeBool -> String "bool"
+
+instance FromJSON AtomType where
+  parseJSON = \ case
+    String "int" -> pure AtomTypeInt
+    String "string" -> pure AtomTypeString
+    String "bool" -> pure AtomTypeBool
+    other -> fail $ "Unknown atom type " <> show other
+
 instance ToJSON Atom where
   toJSON = \ case
     AtomInt i -> Number $ fromIntegral i
@@ -127,10 +143,40 @@ instance FromJSON Atom where
     Number s -> pure $ AtomInt $ round s
     String t -> pure $ AtomString t
     Bool b -> pure $ AtomBool b
-    other -> fail $ "Don't know how to parse " <> show other
+    other -> fail $ "Unknown atom " <> show other
 
 deriving instance ToJSON Row
 deriving instance FromJSON Row
+
+instance ToJSON ColumnDefinition where
+  toJSON (ColumnDefinition name typs) = object
+    [ "name" .= name
+    , "types" .= typs
+    ]
+
+instance FromJSON ColumnDefinition where
+  parseJSON = withObject "ColumnDefinition" $ \ obj ->
+    ColumnDefinition <$> obj .: "name" <*> obj .: "types"
+
+instance ToJSON Table where
+  toJSON (Table name definition rows) = object
+    [ "name" .= name
+    , "definition" .= definition
+    , "rows" .= rows
+    ]
+
+instance FromJSON Table where
+  parseJSON = withObject "Table" $ \ obj ->
+    Table <$> obj .: "name" <*> obj .: "definition" <*> obj .: "rows"
+
+instance ToJSON Database where
+  toJSON (Database tables) = object
+    [ "tables" .= tables
+    ]
+
+instance FromJSON Database where
+  parseJSON = withObject "Database" $ \ obj ->
+    Database <$> obj .: "tables"
 
 toAtomType :: Atom -> AtomType
 toAtomType = \ case
