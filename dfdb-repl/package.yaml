@@ -1,7 +1,7 @@
 name: dfdb-repl
 version: '0.1.0'
 maintainer: Dan Fithian
-license: AllRightsReserved
+license: Apache-2.0
 copyright: 2020 Dan Fithian
 
 ghc-options:
