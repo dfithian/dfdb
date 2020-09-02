@@ -28,6 +28,10 @@ Enter "help" to get this text
 
 dfdb > select (string, int,) foo;
 ["string",1]
+dfdb > drop table foo;
+DROP TABLE
+dfdb > select (string, int,) foo;
+Table does not exist
 
 dfdb > :q
 ```
@@ -38,7 +42,7 @@ dfdb > :q
 
 ## Features
 
-- [x] create table
+- [x] create, drop table
 - [x] insert
 - [x] select
 - [ ] update

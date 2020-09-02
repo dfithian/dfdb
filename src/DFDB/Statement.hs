@@ -87,5 +87,6 @@ parseStatement =
             <$> ( (DFDB.Types.StatementSelect <$ keyword "select" <*> columnNames <*> table <* spaces <* Atto.string ";" <* Atto.takeByteString)
                      <|> (DFDB.Types.StatementInsert <$ keyword "insert" <*> row <*> table <* spaces <* Atto.string ";" <* Atto.takeByteString)
                      <|> (DFDB.Types.StatementCreate <$ keyword "create table" <*> table <*> columnDefinitions <* spaces <* Atto.string ";" <* Atto.takeByteString)
+                     <|> (DFDB.Types.StatementDrop <$ keyword "drop table" <*> table <* spaces <* Atto.string ";" <* Atto.takeByteString)
                 )
         )

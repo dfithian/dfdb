@@ -98,6 +98,7 @@ data Statement
   = StatementSelect [ColumnName] TableName
   | StatementInsert Row TableName
   | StatementCreate TableName [ColumnDefinition]
+  | StatementDrop TableName
   deriving (Eq, Ord, Show)
 
 -- |A statement failed to execute.
