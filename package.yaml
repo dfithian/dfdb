@@ -48,9 +48,9 @@ default-extensions:
   - ViewPatterns
 
 dependencies:
+  - attoparsec
   - base
   - classy-prelude
-  - lens
 
 library:
   source-dirs:
