@@ -1,7 +1,7 @@
 module DFDB.Database where
 
 import ClassyPrelude
-import Control.Lens (_Just, assign, at, modifying, over, use, view)
+import Control.Lens (_Just, assign, at, each, modifying, over, toListOf, use, view)
 import Control.Monad.Except (MonadError, runExceptT, throwError)
 import Control.Monad.State (MonadState)
 import Data.Aeson (encode)
@@ -24,7 +24,7 @@ execute = \ case
   DFDB.Types.StatementSelect cols tableName -> do
     result <- runExceptT $ do
       table <- getTableOrFail tableName
-      columnIndices <- for cols $ \ col -> case elemIndex col (view DFDB.Types.tableColumns table) of
+      columnIndices <- for cols $ \ col -> case elemIndex col (toListOf (DFDB.Types.tableColumns . each . DFDB.Types.columnDefinitionName) table) of
         Nothing -> throwError $ DFDB.Types.StatementFailureCodeSyntaxError $ "Column " <> DFDB.Types.unColumn col <> " does not exist in " <> DFDB.Types.unTableName tableName
         Just c -> pure c
       let rows = flip map (view DFDB.Types.tableRows table) $ \ (DFDB.Types.Row atoms) -> flip map columnIndices $ \ columnIndex -> atoms !! columnIndex
@@ -36,8 +36,15 @@ execute = \ case
     result <- runExceptT $ do
       table <- getTableOrFail tableName
       case length (DFDB.Types.unRow row) == length (view DFDB.Types.tableColumns table) of
-        True -> assign (DFDB.Types.databaseTables . at tableName . _Just) (over DFDB.Types.tableRows (row:) table)
         False -> throwError $ DFDB.Types.StatementFailureCodeSyntaxError "Wrong number of columns"
+        True -> do
+          for_ (zip (DFDB.Types.unRow row) (view DFDB.Types.tableColumns table)) $ \ (atom, columnDefinition) ->
+            let atomType = view DFDB.Types.columnDefinitionType columnDefinition
+                column = view DFDB.Types.columnDefinitionName columnDefinition
+            in case DFDB.Types.toAtomType atom == atomType of
+              True -> pure ()
+              False -> throwError $ DFDB.Types.StatementFailureCodeSyntaxError $ "column " <> DFDB.Types.unColumn column <> " (" <> tshow atom <> ") is not a " <> tshow atomType
+          assign (DFDB.Types.databaseTables . at tableName . _Just) (over DFDB.Types.tableRows (row:) table)
     case result of
       Left code -> pure $ DFDB.Types.StatementResultFailure code
       Right () -> pure $ DFDB.Types.StatementResultSuccess $ DFDB.Types.Output "INSERT 1"
@@ -47,4 +54,3 @@ execute = \ case
         modifying DFDB.Types.databaseTables (insertMap tableName $ DFDB.Types.Table tableName cols [])
         pure $ DFDB.Types.StatementResultSuccess $ DFDB.Types.Output "CREATE TABLE"
       Just _ -> pure $ DFDB.Types.StatementResultFailure $ DFDB.Types.StatementFailureCodeSyntaxError "Table already exists"
-

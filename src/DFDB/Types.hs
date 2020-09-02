@@ -22,11 +22,35 @@ data CommandOutput
   | CommandOutputFailure CommandFailureCode
   deriving (Eq, Ord, Show)
 
+data AtomType
+  = AtomTypeInt
+  | AtomTypeString
+  | AtomTypeBool
+  deriving (Eq, Ord)
+
+instance Show AtomType where
+  show = \ case
+    AtomTypeInt -> "int"
+    AtomTypeString -> "string"
+    AtomTypeBool -> "bool"
+
 data Atom
   = AtomInt Int
   | AtomString Text
   | AtomBool Bool
-  deriving (Eq, Ord, Show)
+  deriving (Eq, Ord)
+
+toAtomType :: Atom -> AtomType
+toAtomType = \ case
+  AtomInt _ -> AtomTypeInt
+  AtomString _ -> AtomTypeString
+  AtomBool _ -> AtomTypeBool
+
+instance Show Atom where
+  show = \ case
+    AtomInt i -> show i
+    AtomString s -> show s
+    AtomBool b -> show b
 
 instance ToJSON Atom where
   toJSON = \ case
@@ -47,6 +71,12 @@ newtype Row = Row { unRow :: [Atom] }
 newtype Column = Column { unColumn :: Text }
   deriving (Eq, Ord, Show)
 
+data ColumnDefinition = ColumnDefinition
+  { _columnDefinitionName :: Column
+  , _columnDefinitionType :: AtomType
+  }
+  deriving (Eq, Ord, Show)
+
 newtype TableName = TableName { unTableName :: Text }
   deriving (Eq, Ord, Show)
 
@@ -55,7 +85,7 @@ pageSize = 4096
 
 data Table = Table
   { _tableName    :: TableName
-  , _tableColumns :: [Column]
+  , _tableColumns :: [ColumnDefinition]
   , _tableRows    :: [Row]
   }
   deriving (Eq, Ord, Show)
@@ -68,7 +98,7 @@ data Database = Database
 data Statement
   = StatementSelect [Column] TableName
   | StatementInsert Row TableName
-  | StatementCreate TableName [Column]
+  | StatementCreate TableName [ColumnDefinition]
   deriving (Eq, Ord, Show)
 
 data StatementFailureCode
@@ -83,5 +113,6 @@ data StatementResult
   | StatementResultFailure StatementFailureCode
   deriving (Eq, Ord, Show)
 
+makeLenses ''ColumnDefinition
 makeLenses ''Table
 makeLenses ''Database
