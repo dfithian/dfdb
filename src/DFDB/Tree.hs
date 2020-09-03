@@ -4,7 +4,9 @@ module DFDB.Tree
   , insert, member
   ) where
 
-import Prelude hiding (map)
+import ClassyPrelude hiding (delete, empty, fold, fromList, map, member, singleton, toList)
+import Control.Monad (fail)
+import Data.Aeson (Value(Null, String), (.:), (.=), FromJSON, ToJSON, object, parseJSON, toJSON, withObject, withText)
 
 data Color = Red | Black
   deriving (Eq, Ord)
@@ -13,6 +15,17 @@ instance Show Color where
   show = \ case
     Red -> "red"
     Black -> "black"
+
+instance ToJSON Color where
+  toJSON = \ case
+    Red -> String "red"
+    Black -> String "black"
+
+instance FromJSON Color where
+  parseJSON = withText "Color" $ \ case
+    "red" -> pure Red
+    "black" -> pure Black
+    other -> fail $ "Unknown color " <> unpack other
 
 data Tree a = Node a Color !(Tree a) !(Tree a) | Nil
   deriving (Eq, Ord)
@@ -28,6 +41,25 @@ showTree depth = \ case
 
 instance Show a => Show (Tree a) where
   show = showTree 0
+
+instance ToJSON a => ToJSON (Tree a) where
+  toJSON = \ case
+    Nil -> Null
+    Node x c tl tr -> object
+      [ "value" .= x
+      , "color" .= c
+      , "left" .= tl
+      , "right" .= tr
+      ]
+
+instance FromJSON a => FromJSON (Tree a) where
+  parseJSON = \ case
+    Null -> pure Nil
+    other -> flip (withObject "Tree") other $ \ obj -> Node
+      <$> obj .: "value"
+      <*> obj .: "color"
+      <*> obj .: "left"
+      <*> obj .: "right"
 
 empty :: Tree a
 empty = Nil

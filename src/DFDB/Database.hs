@@ -7,6 +7,7 @@ import Control.Monad.State (MonadState)
 import Data.Aeson (encode)
 import Data.List ((!!), elemIndex)
 
+import qualified DFDB.Tree
 import qualified DFDB.Types
 
 emptyDatabase :: DFDB.Types.Database
@@ -32,8 +33,8 @@ execute = \ case
     columnIndices <- for cols $ \ col -> case elemIndex col (toListOf (DFDB.Types.tableDefinition . each . DFDB.Types.columnDefinitionName) table) of
       Nothing -> throwError $ DFDB.Types.StatementFailureCodeSyntaxError $ "Column " <> DFDB.Types.unColumnName col <> " does not exist in " <> DFDB.Types.unTableName tableName
       Just c -> pure c
-    let rows = flip map (view DFDB.Types.tableRows table) $ \ (DFDB.Types.Row atoms) -> flip map columnIndices $ \ columnIndex -> atoms !! columnIndex
-    pure . DFDB.Types.Output . unlines . map (decodeUtf8 . toStrict . encode) $ rows
+    let rows = flip DFDB.Tree.map (view DFDB.Types.tableRows table) $ \ (DFDB.Types.Row atoms) -> flip map columnIndices $ \ columnIndex -> atoms !! columnIndex
+    pure . DFDB.Types.Output . unlines . map (decodeUtf8 . toStrict . encode) . DFDB.Tree.toList $ rows
 
   -- execute an insert
   DFDB.Types.StatementInsert row tableName -> runInner $ do
@@ -48,14 +49,14 @@ execute = \ case
           in case DFDB.Types.toAtomType atom == atomType of
             True -> pure ()
             False -> throwError $ DFDB.Types.StatementFailureCodeSyntaxError $ "Column " <> DFDB.Types.unColumnName column <> " (" <> tshow atom <> ") is not a " <> tshow atomType
-        assign (DFDB.Types.databaseTables . at tableName . _Just) (over DFDB.Types.tableRows (row:) table)
+        assign (DFDB.Types.databaseTables . at tableName . _Just) (over DFDB.Types.tableRows (DFDB.Tree.insert row) table)
         pure $ DFDB.Types.Output "INSERT 1"
 
   -- execute a create table
   DFDB.Types.StatementCreate tableName cols -> runInner $ do
     use (DFDB.Types.databaseTables . at tableName) >>= \ case
       Nothing -> do
-        modifying DFDB.Types.databaseTables (insertMap tableName $ DFDB.Types.Table tableName cols [])
+        modifying DFDB.Types.databaseTables (insertMap tableName $ DFDB.Types.Table tableName cols DFDB.Tree.empty)
         pure $ DFDB.Types.Output "CREATE TABLE"
       Just _ -> throwError $ DFDB.Types.StatementFailureCodeSyntaxError "Table already exists"
 

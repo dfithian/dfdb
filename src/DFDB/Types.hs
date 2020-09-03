@@ -8,6 +8,8 @@ import Data.Aeson
   , parseJSON, toJSON, withObject
   )
 
+import DFDB.Tree (Tree)
+
 -- |User input.
 newtype Command = Command { unCommand :: Text }
   deriving (Eq, Ord, Show)
@@ -82,7 +84,7 @@ data Table = Table
   -- ^ The name of the table.
   , _tableDefinition :: [ColumnDefinition]
   -- ^ The column definitions of the table.
-  , _tableRows       :: [Row]
+  , _tableRows       :: Tree Row
   -- ^ The data in the table.
   }
   deriving (Eq, Ord, Show)
