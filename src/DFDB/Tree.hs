@@ -1,12 +1,33 @@
-module DFDB.Tree where
+module DFDB.Tree
+  ( Tree(Node, Nil), Color(Red, Black)
+  , empty, singleton, toList, fromList, map, fold
+  , insert, member
+  ) where
 
 import Prelude hiding (map)
 
 data Color = Red | Black
-  deriving (Eq, Ord, Show)
+  deriving (Eq, Ord)
 
-data Tree a = Node a Color (Tree a) (Tree a) | Nil
-  deriving (Eq, Ord, Show)
+instance Show Color where
+  show = \ case
+    Red -> "red"
+    Black -> "black"
+
+data Tree a = Node a Color !(Tree a) !(Tree a) | Nil
+  deriving (Eq, Ord)
+
+showTree :: Show a => Int -> Tree a -> String
+showTree depth = \ case
+  Nil -> spaces <> "nil" <> "\n"
+  Node x c l r -> spaces <> "node " <> show x <> " " <> show c <> "\n"
+    <> showTree (depth + 1) l
+    <> showTree (depth + 1) r
+  where
+    spaces = mconcat $ replicate depth "  "
+
+instance Show a => Show (Tree a) where
+  show = showTree 0
 
 empty :: Tree a
 empty = Nil
@@ -22,11 +43,6 @@ toList = \ case
   Nil -> []
   Node x _ tl tr -> toList tl <> [x] <> toList tr
 
-rootMay :: Tree a -> Maybe a
-rootMay = \ case
-  Nil -> Nothing
-  Node x _ _ _ -> Just x
-
 map :: (a -> b) -> Tree a -> Tree b
 map f = \ case
   Nil -> Nil
@@ -37,30 +53,27 @@ fold f y = \ case
   Nil -> y
   Node x _ tl tr -> fold f (f x (fold f y tr)) tl
 
--- FIXME
-repair :: Ord a => Tree a -> Tree a
-repair = id
+balance :: a -> Color -> Tree a -> Tree a -> Tree a
+balance z Black (Node y Red (Node x Red a b) c) d = Node y Red (Node x Black a b) (Node z Black c d)
+balance z Black (Node x Red a (Node y Red b c)) d = Node y Red (Node x Black a b) (Node z Black c d)
+balance x Black a (Node z Red (Node y Red b c) d) = Node y Red (Node x Black a b) (Node z Black c d)
+balance x Black a (Node y Red b (Node z Red c d)) = Node y Red (Node x Black a b) (Node z Black c d)
+balance x c a b = Node x c a b
 
-merge :: Ord a => Tree a -> Tree a -> Tree a
-merge l = fold insert l
-
--- FIXME
-insert :: Ord a => a -> Tree a -> Tree a
-insert x = \ case
-  Nil -> Node x Red Nil Nil
-  Node y c tl tr -> case compare x y of
-    EQ -> Node y c tl tr
-    LT -> Node y c (insert x tl) tr
-    GT -> Node y c tl (insert x tr)
-
--- FIXME
-delete :: Ord a => a -> Tree a -> Tree a
-delete x = \ case
+blackRoot :: Tree a -> Tree a
+blackRoot = \ case
   Nil -> Nil
-  Node y c tl tr -> case compare x y of
-    EQ -> merge tl tr
-    LT -> Node y c (delete x tl) tr
-    GT -> Node y c tl (delete x tr)
+  Node x _ tl tr -> Node x Black tl tr
+
+insert :: Ord a => a -> Tree a -> Tree a
+insert x = blackRoot . unsafeInsert
+  where
+    unsafeInsert = \ case
+      Nil -> Node x Red Nil Nil
+      Node y c tl tr -> case compare x y of
+        EQ -> Node y c tl tr
+        LT -> balance y c (unsafeInsert tl) tr
+        GT -> balance y c tl (unsafeInsert tr)
 
 member :: Ord a => a -> Tree a -> Bool
 member x = \ case

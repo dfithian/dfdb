@@ -54,6 +54,7 @@ dependencies:
   - bytestring
   - classy-prelude
   - directory
+  - hspec
   - lens
   - mtl
 
@@ -80,6 +81,5 @@ tests:
     source-dirs:
       - test
     dependencies:
-      - hspec
       - QuickCheck
       - dfdb
