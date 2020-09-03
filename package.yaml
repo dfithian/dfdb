@@ -73,3 +73,13 @@ executables:
       - -threaded
       - -rtsopts
       - '"-with-rtsopts=-N -T"'
+
+tests:
+  test:
+    main: main.hs
+    source-dirs:
+      - test
+    dependencies:
+      - hspec
+      - QuickCheck
+      - dfdb
