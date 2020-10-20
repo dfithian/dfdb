@@ -65,6 +65,12 @@ columnName = DFDB.Types.ColumnName . decodeUtf8 <$> alphaOrUnderscore
 columnNames :: Atto.Parser [DFDB.Types.ColumnName]
 columnNames = list columnName
 
+whereClause :: Atto.Parser DFDB.Types.WhereClause
+whereClause = DFDB.Types.WhereClause <$> columnName <*> (keyword "=" *> atom)
+
+wheres :: Atto.Parser [DFDB.Types.WhereClause]
+wheres = list whereClause
+
 atomType :: Atto.Parser DFDB.Types.AtomType
 atomType =
   (DFDB.Types.AtomTypeInt <$ Atto.string "int")
@@ -87,7 +93,7 @@ parseStatement :: Atto.Parser DFDB.Types.ParsedStatement
 parseStatement =
   (DFDB.Types.ParsedStatementHelp <$ keyword "help")
     <|> ( DFDB.Types.ParsedStatement
-            <$> ( (DFDB.Types.StatementSelect <$ keyword "select" <*> columnNames <*> table <* spaces <* Atto.string ";" <* Atto.takeByteString)
+            <$> ( (DFDB.Types.StatementSelect <$ keyword "select" <*> columnNames <*> table <*> (keyword "where" *> wheres) <* spaces <* Atto.string ";" <* Atto.takeByteString)
                      <|> (DFDB.Types.StatementInsert <$ keyword "insert" <*> row <*> table <* spaces <* Atto.string ";" <* Atto.takeByteString)
                      <|> (DFDB.Types.StatementCreate <$ keyword "create table" <*> table <*> columnDefinitions <* spaces <* Atto.string ";" <* Atto.takeByteString)
                      <|> (DFDB.Types.StatementCreateIndex <$ keyword "create index" <*> index <*> table <*> columnNames <* spaces <* Atto.string ";" <* Atto.takeByteString)

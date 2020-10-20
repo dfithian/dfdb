@@ -121,9 +121,12 @@ data Database = Database
   }
   deriving (Eq, Ord, Show)
 
+data WhereClause = WhereClause ColumnName Atom
+  deriving (Eq, Ord, Show)
+
 -- |A statement to execute against a 'Database'.
 data Statement
-  = StatementSelect [ColumnName] TableName
+  = StatementSelect [ColumnName] TableName [WhereClause]
   | StatementInsert Row TableName
   | StatementCreate TableName [ColumnDefinition]
   | StatementCreateIndex IndexName TableName [ColumnName]

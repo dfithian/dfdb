@@ -85,7 +85,7 @@ spec = describe "Database" $ do
       sequenceStatements . NonEmpty.fromList $
         [ Database.execute $ DFDB.Types.StatementCreate fooTableName [barColumnDef, binColumnDef]
         , Database.execute $ DFDB.Types.StatementInsert row fooTableName
-        , Database.execute $ DFDB.Types.StatementSelect [binColumnName] fooTableName
+        , Database.execute $ DFDB.Types.StatementSelect [binColumnName] fooTableName []
         ]
 
   it "drops a table" $
