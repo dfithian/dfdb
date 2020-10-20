@@ -10,7 +10,7 @@ import DFDB.TreeLaws (checkBinary, checkColor, checkPathCount)
 import qualified DFDB.Tree as Tree
 
 genTree :: Ord a => Gen a -> Gen (Tree a)
-genTree gen = Tree.fromList <$> listOf gen
+genTree gen = Tree.setFromList <$> listOf gen
 
 genIntTree :: Gen (Tree Int)
 genIntTree = genTree arbitrary
@@ -24,9 +24,9 @@ runTests d gen f = do
 spec :: Spec
 spec = describe "Tree" $ do
   prop "toList == fold (:)" $
-    forAll genIntTree $ \ t -> Tree.toList t === Tree.fold (:) [] t
+    forAll genIntTree $ \ t -> Tree.setToList t === Tree.foldKeys (:) [] t
   prop "membership" $
-    forAll genIntTree $ \ t -> all (`Tree.member` t) $ Tree.toList t
+    forAll genIntTree $ \ t -> all (`Tree.member` t) $ Tree.setToList t
 
   runTests "generation" genIntTree id
-  runTests "insertion" ((,) <$> arbitrary <*> genIntTree) $ uncurry Tree.insert
+  runTests "insertion" ((,) <$> arbitrary <*> genIntTree) $ uncurry Tree.insertSet
