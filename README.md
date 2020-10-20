@@ -57,3 +57,7 @@ dfdb > :q
 - [x] query planning
 - [x] autocommit transactions
 - [ ] transactions
+
+## Benchmarks
+
+For info about benchmarks, see [benchmark.html](benchmark.html).
