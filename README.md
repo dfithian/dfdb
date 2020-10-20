@@ -28,7 +28,7 @@ Welcome to DFDB
 Enter "help" to get this text
   Quit commands: :q, quit(), exit
 
-dfdb > select (string, int,) foo;
+dfdb > select (string, int,) foo where (int = 1,);
 ["string",1]
 dfdb > drop table foo;
 DROP TABLE
