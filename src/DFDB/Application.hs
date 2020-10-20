@@ -68,3 +68,4 @@ dfdbRepl = do
           DFDB.Types.StatementResultSuccess output -> putStrLn $ DFDB.Types.unOutput output
           DFDB.Types.StatementResultFailure code -> case code of
             DFDB.Types.StatementFailureCodeSyntaxError err -> putStrLn err
+            DFDB.Types.StatementFailureCodeInternalError err -> putStrLn err

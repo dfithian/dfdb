@@ -49,7 +49,9 @@ dfdb > :q
 - [ ] nullable/non-nullable columns
 - [x] primitive types
 - [x] persist to disk
-- [ ] primary keys
+- [x] primary keys
 - [ ] foreign keys
-- [ ] indexes
+- [x] indexes
 - [ ] query planning
+- [x] autocommit transactions
+- [ ] transactions

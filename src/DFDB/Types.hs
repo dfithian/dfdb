@@ -92,6 +92,8 @@ data Table = Table
   -- ^ The data in the table.
   , _tableNextPrimaryKey :: PrimaryKey
   -- ^ The next primary key in the table.
+  , _tableIndices        :: [IndexName]
+  -- ^ Indices for the table.
   }
   deriving (Eq, Ord, Show)
 
@@ -132,6 +134,7 @@ data Statement
 -- |A statement failed to execute.
 data StatementFailureCode
   = StatementFailureCodeSyntaxError Text
+  | StatementFailureCodeInternalError Text
   deriving (Eq, Ord, Show)
 
 -- |An executed statement's output.
@@ -190,16 +193,17 @@ instance FromJSON ColumnDefinition where
     ColumnDefinition <$> obj .: "name" <*> obj .: "types"
 
 instance ToJSON Table where
-  toJSON (Table name definition rows nextPrimaryKey) = object
+  toJSON (Table name definition rows nextPrimaryKey indices) = object
     [ "name" .= name
     , "definition" .= definition
     , "rows" .= rows
     , "nextPrimaryKey" .= nextPrimaryKey
+    , "indices" .= indices
     ]
 
 instance FromJSON Table where
   parseJSON = withObject "Table" $ \ obj ->
-    Table <$> obj .: "name" <*> obj .: "definition" <*> obj .: "rows" <*> obj .: "nextPrimaryKey"
+    Table <$> obj .: "name" <*> obj .: "definition" <*> obj .: "rows" <*> obj .: "nextPrimaryKey" <*> obj .: "indices"
 
 instance ToJSON Index where
   toJSON (Index name table columns contents) = object
