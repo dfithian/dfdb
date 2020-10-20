@@ -109,7 +109,7 @@ data Index = Index
   -- ^ The name of the table.
   , _indexColumns :: [ColumnName]
   -- ^ The name of the columns in the index.
-  , _indexData    :: TreeMap [Atom] PrimaryKey
+  , _indexData    :: TreeMap [Atom] [Row]
   -- ^ The data in the table.
   }
   deriving (Eq, Ord, Show)
@@ -121,12 +121,19 @@ data Database = Database
   }
   deriving (Eq, Ord, Show)
 
-data WhereClause = WhereClause ColumnName Atom
+-- |A where filter.
+data WhereClause = WhereClause
+  { _whereClauseColumn     :: ColumnName
+  -- ^ The column this applies to.
+  , _whereClauseValue      :: Atom
+  -- ^ The value this applies to.
+  }
   deriving (Eq, Ord, Show)
 
 -- |A statement to execute against a 'Database'.
 data Statement
   = StatementSelect [ColumnName] TableName [WhereClause]
+  -- ^ Where clauses are AND.
   | StatementInsert Row TableName
   | StatementCreate TableName [ColumnDefinition]
   | StatementCreateIndex IndexName TableName [ColumnName]
@@ -155,6 +162,7 @@ makeLenses ''ColumnDefinition
 makeLenses ''Table
 makeLenses ''Index
 makeLenses ''Database
+makeLenses ''WhereClause
 
 instance ToJSON AtomType where
   toJSON = \ case

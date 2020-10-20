@@ -59,9 +59,11 @@ spec = describe "Database" $ do
   let fooTableName = DFDB.Types.TableName "foo"
       barColumnName = DFDB.Types.ColumnName "bar"
       barColumnDef = DFDB.Types.ColumnDefinition barColumnName DFDB.Types.AtomTypeInt
+      barColumnValue = DFDB.Types.AtomInt 1
       binColumnName = DFDB.Types.ColumnName "bin"
       binColumnDef = DFDB.Types.ColumnDefinition binColumnName DFDB.Types.AtomTypeString
-      row = DFDB.Types.Row [DFDB.Types.AtomInt 1, DFDB.Types.AtomString "qux"]
+      binColumnValue = DFDB.Types.AtomString "qux"
+      row = DFDB.Types.Row [barColumnValue, binColumnValue]
       bazIndexName = DFDB.Types.IndexName "baz"
 
   it "creates a table" $
@@ -85,7 +87,7 @@ spec = describe "Database" $ do
       sequenceStatements . NonEmpty.fromList $
         [ Database.execute $ DFDB.Types.StatementCreate fooTableName [barColumnDef, binColumnDef]
         , Database.execute $ DFDB.Types.StatementInsert row fooTableName
-        , Database.execute $ DFDB.Types.StatementSelect [binColumnName] fooTableName []
+        , Database.execute $ DFDB.Types.StatementSelect [binColumnName] fooTableName [DFDB.Types.WhereClause binColumnName binColumnValue]
         ]
 
   it "drops a table" $
@@ -105,7 +107,7 @@ spec = describe "Database" $ do
         ]
 
   it "creates an index after inserting" $
-    let bazIndex = DFDB.Types.Index bazIndexName fooTableName [barColumnName] (DFDB.Tree.singletonMap [DFDB.Types.AtomInt 1] DFDB.Types.initPrimaryKey)
+    let bazIndex = DFDB.Types.Index bazIndexName fooTableName [barColumnName] (DFDB.Tree.singletonMap [barColumnValue] [row])
         db = DFDB.Types.Database (singletonMap fooTableName $ DFDB.Types.Table fooTableName [barColumnDef, binColumnDef] (DFDB.Tree.singletonMap DFDB.Types.initPrimaryKey row) (DFDB.Types.PrimaryKey 2) [bazIndexName]) (singletonMap bazIndexName bazIndex)
     in checkSuccess db $
       sequenceStatements . NonEmpty.fromList $
@@ -115,13 +117,25 @@ spec = describe "Database" $ do
         ]
 
   it "creates an index before inserting" $
-    let bazIndex = DFDB.Types.Index bazIndexName fooTableName [barColumnName] (DFDB.Tree.singletonMap [DFDB.Types.AtomInt 1] DFDB.Types.initPrimaryKey)
+    let bazIndex = DFDB.Types.Index bazIndexName fooTableName [barColumnName] (DFDB.Tree.singletonMap [barColumnValue] [row])
         db = DFDB.Types.Database (singletonMap fooTableName $ DFDB.Types.Table fooTableName [barColumnDef, binColumnDef] (DFDB.Tree.singletonMap DFDB.Types.initPrimaryKey row) (DFDB.Types.PrimaryKey 2) [bazIndexName]) (singletonMap bazIndexName bazIndex)
     in checkSuccess db $
       sequenceStatements . NonEmpty.fromList $
         [ Database.execute $ DFDB.Types.StatementCreate fooTableName [barColumnDef, binColumnDef]
         , Database.execute $ DFDB.Types.StatementCreateIndex bazIndexName fooTableName [barColumnName]
         , Database.execute $ DFDB.Types.StatementInsert row fooTableName
+        ]
+
+  it "selects from an index" $
+    let bazIndex = DFDB.Types.Index bazIndexName fooTableName [barColumnName] (DFDB.Tree.singletonMap [barColumnValue] [row])
+        db = DFDB.Types.Database (singletonMap fooTableName $ DFDB.Types.Table fooTableName [barColumnDef, binColumnDef] (DFDB.Tree.singletonMap DFDB.Types.initPrimaryKey row) (DFDB.Types.PrimaryKey 2) [bazIndexName]) (singletonMap bazIndexName bazIndex)
+        out = DFDB.Types.Output "[\"qux\"]\n"
+    in checkSuccessWith db out $
+      sequenceStatements . NonEmpty.fromList $
+        [ Database.execute $ DFDB.Types.StatementCreate fooTableName [barColumnDef, binColumnDef]
+        , Database.execute $ DFDB.Types.StatementCreateIndex bazIndexName fooTableName [barColumnName]
+        , Database.execute $ DFDB.Types.StatementInsert row fooTableName
+        , Database.execute $ DFDB.Types.StatementSelect [binColumnName] fooTableName [DFDB.Types.WhereClause barColumnName barColumnValue]
         ]
 
   it "drops an index" $

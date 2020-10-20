@@ -51,11 +51,18 @@ getTableIndices table =
 
 select :: (MonadState DFDB.Types.Database m, MonadError DFDB.Types.StatementFailureCode m)
   => DFDB.Types.Table -> [DFDB.Types.ColumnName] -> [DFDB.Types.WhereClause]
-  -> m (DFDB.Tree.TreeMap DFDB.Types.PrimaryKey [DFDB.Types.Atom])
-select table cols _wheres = do
+  -> m [[DFDB.Types.Atom]]
+select table cols wheres = do
+  let whereColumns = toListOf (each . DFDB.Types.whereClauseColumn) wheres
+      whereValues = toListOf (each . DFDB.Types.whereClauseValue) wheres
+  tableIndexMay <- headMay . filter ((==) whereColumns . view DFDB.Types.indexColumns) <$> getTableIndices table
   columnIndices <- getColumnIndices table cols
-  _tableIndices <- getTableIndices table
-  pure $ flip DFDB.Tree.mapValues (view DFDB.Types.tableRows table) $ \ (DFDB.Types.Row atoms) -> flip map columnIndices $ (!!) atoms
+  let rows = case tableIndexMay of
+        Nothing -> filter (\ (DFDB.Types.Row atoms) -> map ((!!) atoms) columnIndices == whereValues) . map snd . DFDB.Tree.mapToList . view DFDB.Types.tableRows $ table
+        Just tableIndex -> fromMaybe mempty . DFDB.Tree.lookup whereValues . view DFDB.Types.indexData $ tableIndex
+  pure . flip map rows $ \ (DFDB.Types.Row atoms) ->
+    flip map columnIndices $
+      (!!) atoms
 
 execute :: MonadState DFDB.Types.Database m => DFDB.Types.Statement -> m DFDB.Types.StatementResult
 execute = \ case
@@ -63,7 +70,7 @@ execute = \ case
   DFDB.Types.StatementSelect cols tableName wheres -> runInner $ do
     table <- getTableOrFail tableName
     rows <- select table cols wheres
-    pure . DFDB.Types.Output . unlines . map (decodeUtf8 . toStrict . encode . snd) . DFDB.Tree.mapToList $ rows
+    pure . DFDB.Types.Output . unlines . map (decodeUtf8 . toStrict . encode) $ rows
 
   -- execute an insert
   DFDB.Types.StatementInsert row@(DFDB.Types.Row atoms) tableName -> runInner $ do
@@ -91,7 +98,7 @@ execute = \ case
             Just index -> do
               columnIndices <- getColumnIndices table . view DFDB.Types.indexColumns $ index
               assign (DFDB.Types.databaseIndices . at indexName . _Just)
-                ( over DFDB.Types.indexData (DFDB.Tree.insertMap (flip map columnIndices $ (!!) atoms) primaryKey)
+                ( over DFDB.Types.indexData (DFDB.Tree.insertMapWith (<>) (flip map columnIndices $ (!!) atoms) [row])
                     $ index
                 )
         pure $ DFDB.Types.Output "INSERT 1"
@@ -119,7 +126,12 @@ execute = \ case
       )
     use (DFDB.Types.databaseIndices . at indexName) >>= \ case
       Nothing -> do
-        contents <- DFDB.Tree.map swap <$> select table cols mempty
+        columnIndices <- getColumnIndices table cols
+        let contents = DFDB.Tree.mapFromListWith (<>)
+              . map (\ (_, row@(DFDB.Types.Row atoms)) -> (flip map columnIndices $ (!!) atoms, [row]))
+              . DFDB.Tree.mapToList
+              . view DFDB.Types.tableRows
+              $ table
         modifying DFDB.Types.databaseIndices (insertMap indexName $ DFDB.Types.Index indexName tableName cols contents)
         pure $ DFDB.Types.Output "CREATE INDEX"
       Just _ -> throwError $ DFDB.Types.StatementFailureCodeSyntaxError "Index already exists"

@@ -1,8 +1,8 @@
 module DFDB.Tree
   ( TreeMap(Node, Nil), Tree, Color(Red, Black)
-  , empty, singletonMap, singletonSet, mapToList, setToList, mapFromList, setFromList
+  , empty, singletonMap, singletonSet, mapToList, setToList, mapFromList, mapFromListWith, setFromList
   , map, mapKeys, mapValues, fold, foldKeys
-  , insertMap, insertSet, lookup, member
+  , insertMap, insertMapWith, insertSet, lookup, member
   ) where
 
 import ClassyPrelude hiding
@@ -94,6 +94,9 @@ singletonSet x = singletonMap x ()
 mapFromList :: Ord a => [(a, b)] -> TreeMap a b
 mapFromList = foldr (uncurry insertMap) empty
 
+mapFromListWith :: Ord a => (b -> b -> b) -> [(a, b)] -> TreeMap a b
+mapFromListWith f = foldr (uncurry (insertMapWith f)) empty
+
 setFromList :: Ord a => [a] -> Tree a
 setFromList = mapFromList . List.map (, ())
 
@@ -145,6 +148,16 @@ insertMap x y = blackRoot . unsafeInsert
       Nil -> Node x y Red Nil Nil
       Node z w c tl tr -> case compare x z of
         EQ -> Node z w c tl tr
+        LT -> balance (z, w) c (unsafeInsert tl) tr
+        GT -> balance (z, w) c tl (unsafeInsert tr)
+
+insertMapWith :: (Ord a) => (b -> b -> b) -> a -> b -> TreeMap a b -> TreeMap a b
+insertMapWith f x y = blackRoot . unsafeInsert
+  where
+    unsafeInsert = \ case
+      Nil -> Node x y Red Nil Nil
+      Node z w c tl tr -> case compare x z of
+        EQ -> Node z (f w y) c tl tr
         LT -> balance (z, w) c (unsafeInsert tl) tr
         GT -> balance (z, w) c tl (unsafeInsert tr)
 
