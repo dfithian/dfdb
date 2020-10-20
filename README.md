@@ -18,6 +18,8 @@ INSERT 1
 dfdb > select (string, int,) foo;
 ["string",1]
 
+dfdb > create index foo_int foo (int,);
+CREATE INDEX
 dfdb > :q
 
 $ stack run dfdb
