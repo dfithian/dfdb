@@ -1,12 +1,17 @@
 module DFDB.Tree
-  ( Tree(Node, Nil), Color(Red, Black)
-  , empty, singleton, toList, fromList, map, fold
-  , insert, member
+  ( TreeMap(Node, Nil), Tree, Color(Red, Black)
+  , empty, singletonMap, singletonSet, mapToList, setToList, mapFromList, setFromList
+  , map, mapKeys, mapValues, fold, foldKeys
+  , insertMap, insertSet, lookup, member
   ) where
 
-import ClassyPrelude hiding (delete, empty, fold, fromList, map, member, singleton, toList)
+import ClassyPrelude hiding
+  ( delete, empty, fold, fromList, insertMap, insertSet, lookup, map, mapFromList, mapToList, member
+  , setFromList, setToList, singleton, singletonMap, singletonSet, toList
+  )
 import Control.Monad (fail)
 import Data.Aeson (Value(Null, String), (.:), (.=), FromJSON, ToJSON, object, parseJSON, toJSON, withObject, withText)
+import qualified Data.List as List
 
 data Color = Red | Black
   deriving (Eq, Ord)
@@ -27,87 +32,132 @@ instance FromJSON Color where
     "black" -> pure Black
     other -> fail $ "Unknown color " <> unpack other
 
-data Tree a = Node a Color !(Tree a) !(Tree a) | Nil
+data TreeMap a b = Node !a !b Color !(TreeMap a b) !(TreeMap a b) | Nil
   deriving (Eq, Ord)
 
-showTree :: Show a => Int -> Tree a -> String
+type Tree a = TreeMap a ()
+
+showTreeMap :: (Show a, Show b) => Int -> TreeMap a b -> String
+showTreeMap depth = \ case
+  Nil -> spaces <> "nil" <> "\n"
+  Node x y c l r -> spaces <> "node " <> show x <> " " <> show y <> " " <> show c <> "\n"
+    <> showTreeMap (depth + 1) l
+    <> showTreeMap (depth + 1) r
+  where
+    spaces = mconcat $ replicate depth "  "
+
+showTree :: (Show a) => Int -> Tree a -> String
 showTree depth = \ case
   Nil -> spaces <> "nil" <> "\n"
-  Node x c l r -> spaces <> "node " <> show x <> " " <> show c <> "\n"
+  Node x _ c l r -> spaces <> "node " <> show x <> " " <> show c <> "\n"
     <> showTree (depth + 1) l
     <> showTree (depth + 1) r
   where
     spaces = mconcat $ replicate depth "  "
 
-instance Show a => Show (Tree a) where
+instance {-# OVERLAPPABLE #-} (Show a, Show b) => Show (TreeMap a b) where
+  show = showTreeMap 0
+
+instance {-# OVERLAPPING #-} (Show a) => Show (Tree a) where
   show = showTree 0
 
-instance ToJSON a => ToJSON (Tree a) where
+instance (ToJSON a, ToJSON b) => ToJSON (TreeMap a b) where
   toJSON = \ case
     Nil -> Null
-    Node x c tl tr -> object
-      [ "value" .= x
+    Node x y c tl tr -> object
+      [ "key" .= x
+      , "value" .= y
       , "color" .= c
       , "left" .= tl
       , "right" .= tr
       ]
 
-instance FromJSON a => FromJSON (Tree a) where
+instance (FromJSON a, FromJSON b) => FromJSON (TreeMap a b) where
   parseJSON = \ case
     Null -> pure Nil
-    other -> flip (withObject "Tree") other $ \ obj -> Node
-      <$> obj .: "value"
+    other -> flip (withObject "TreeMap") other $ \ obj -> Node
+      <$> obj .: "key"
+      <*> obj .: "value"
       <*> obj .: "color"
       <*> obj .: "left"
       <*> obj .: "right"
 
-empty :: Tree a
+empty :: TreeMap a b
 empty = Nil
 
-singleton :: a -> Tree a
-singleton x = Node x Black Nil Nil
+singletonMap :: a -> b -> TreeMap a b
+singletonMap x y = Node x y Black Nil Nil
 
-fromList :: Ord a => [a] -> Tree a
-fromList = foldr insert empty
+singletonSet :: a -> Tree a
+singletonSet x = singletonMap x ()
 
-toList :: Tree a -> [a]
-toList = \ case
+mapFromList :: Ord a => [(a, b)] -> TreeMap a b
+mapFromList = foldr (uncurry insertMap) empty
+
+setFromList :: Ord a => [a] -> Tree a
+setFromList = mapFromList . List.map (, ())
+
+mapToList :: TreeMap a b -> [(a, b)]
+mapToList = \ case
   Nil -> []
-  Node x _ tl tr -> toList tl <> [x] <> toList tr
+  Node x y _ tl tr -> mapToList tl <> [(x, y)] <> mapToList tr
 
-map :: (a -> b) -> Tree a -> Tree b
+setToList :: Tree a -> [a]
+setToList = List.map fst . mapToList
+
+map :: ((a, b) -> (c, d)) -> TreeMap a b -> TreeMap c d
 map f = \ case
   Nil -> Nil
-  Node x c tl tr -> Node (f x) c (map f tl) (map f tr)
+  Node x y c tl tr -> let (z, w) = f (x, y) in Node z w c (map f tl) (map f tr)
 
-fold :: (a -> b -> b) -> b -> Tree a -> b
-fold f y = \ case
-  Nil -> y
-  Node x _ tl tr -> fold f (f x (fold f y tr)) tl
+mapValues :: (b -> c) -> TreeMap a b -> TreeMap a c
+mapValues f = map $ \ (x, y) -> (x, f y)
 
-balance :: a -> Color -> Tree a -> Tree a -> Tree a
-balance z Black (Node y Red (Node x Red a b) c) d = Node y Red (Node x Black a b) (Node z Black c d)
-balance z Black (Node x Red a (Node y Red b c)) d = Node y Red (Node x Black a b) (Node z Black c d)
-balance x Black a (Node z Red (Node y Red b c) d) = Node y Red (Node x Black a b) (Node z Black c d)
-balance x Black a (Node y Red b (Node z Red c d)) = Node y Red (Node x Black a b) (Node z Black c d)
-balance x c a b = Node x c a b
+mapKeys :: (a -> c) -> TreeMap a b -> TreeMap c b
+mapKeys f = map $ \ (x, y) -> (f x, y)
 
-blackRoot :: Tree a -> Tree a
+fold :: (b -> c -> c) -> c -> TreeMap a b -> c
+fold f z = \ case
+  Nil -> z
+  Node _ y _ tl tr -> fold f (f y (fold f z tr)) tl
+
+foldKeys :: (a -> c -> c) -> c -> TreeMap a b -> c
+foldKeys f z = \ case
+  Nil -> z
+  Node x _ _ tl tr -> foldKeys f (f x (foldKeys f z tr)) tl
+
+balance :: (a, b) -> Color -> TreeMap a b -> TreeMap a b -> TreeMap a b
+balance (z1, z2) Black (Node y1 y2 Red (Node x1 x2 Red a b) c) d = Node y1 y2 Red (Node x1 x2 Black a b) (Node z1 z2 Black c d)
+balance (z1, z2) Black (Node x1 x2 Red a (Node y1 y2 Red b c)) d = Node y1 y2 Red (Node x1 x2 Black a b) (Node z1 z2 Black c d)
+balance (x1, x2) Black a (Node z1 z2 Red (Node y1 y2 Red b c) d) = Node y1 y2 Red (Node x1 x2 Black a b) (Node z1 z2 Black c d)
+balance (x1, x2) Black a (Node y1 y2 Red b (Node z1 z2 Red c d)) = Node y1 y2 Red (Node x1 x2 Black a b) (Node z1 z2 Black c d)
+balance (x1, x2) c a b = Node x1 x2 c a b
+
+blackRoot :: TreeMap a b -> TreeMap a b
 blackRoot = \ case
   Nil -> Nil
-  Node x _ tl tr -> Node x Black tl tr
+  Node x y _ tl tr -> Node x y Black tl tr
 
-insert :: Ord a => a -> Tree a -> Tree a
-insert x = blackRoot . unsafeInsert
+insertMap :: Ord a => a -> b -> TreeMap a b -> TreeMap a b
+insertMap x y = blackRoot . unsafeInsert
   where
     unsafeInsert = \ case
-      Nil -> Node x Red Nil Nil
-      Node y c tl tr -> case compare x y of
-        EQ -> Node y c tl tr
-        LT -> balance y c (unsafeInsert tl) tr
-        GT -> balance y c tl (unsafeInsert tr)
+      Nil -> Node x y Red Nil Nil
+      Node z w c tl tr -> case compare x z of
+        EQ -> Node z w c tl tr
+        LT -> balance (z, w) c (unsafeInsert tl) tr
+        GT -> balance (z, w) c tl (unsafeInsert tr)
+
+insertSet :: Ord a => a -> Tree a -> Tree a
+insertSet x = insertMap x ()
+
+lookup :: Ord a => a -> TreeMap a b -> Maybe b
+lookup x = \ case
+  Nil -> Nothing
+  Node y z _ tl tr -> case compare x y of
+    EQ -> Just z
+    LT -> lookup x tl
+    GT -> lookup x tr
 
 member :: Ord a => a -> Tree a -> Bool
-member x = \ case
-  Nil -> False
-  Node y _ tl tr -> x == y || (if x > y then member x tr else member x tl)
+member x = isJust . lookup x

@@ -1,14 +1,14 @@
 module DFDB.Types where
 
 import ClassyPrelude hiding (Index)
-import Control.Lens.TH (makeLenses)
+import Control.Lens.TH (makeLenses, makePrisms)
 import Control.Monad (fail)
 import Data.Aeson
   ( Value(Bool, Number, String), (.:), (.=), FromJSON, FromJSONKey, ToJSON, ToJSONKey, object
   , parseJSON, toJSON, withObject
   )
 
-import DFDB.Tree (Tree)
+import DFDB.Tree (TreeMap)
 
 -- |User input.
 newtype Command = Command { unCommand :: Text }
@@ -57,6 +57,10 @@ instance Show Atom where
     AtomString s -> show s
     AtomBool b -> show b
 
+-- |A primary key.
+newtype PrimaryKey = PrimaryKey { unPrimaryKey :: Int }
+  deriving (Eq, Ord, Show, ToJSON, FromJSON)
+
 -- |A row of values in a table.
 newtype Row = Row { unRow :: [Atom] }
   deriving (Eq, Ord, Show)
@@ -80,12 +84,14 @@ newtype TableName = TableName { unTableName :: Text }
 
 -- |A table, including its name, definition, and data.
 data Table = Table
-  { _tableName       :: TableName
+  { _tableName           :: TableName
   -- ^ The name of the table.
-  , _tableDefinition :: [ColumnDefinition]
+  , _tableDefinition     :: [ColumnDefinition]
   -- ^ The column definitions of the table.
-  , _tableRows       :: Tree Row
+  , _tableRows           :: TreeMap PrimaryKey Row
   -- ^ The data in the table.
+  , _tableNextPrimaryKey :: PrimaryKey
+  -- ^ The next primary key in the table.
   }
   deriving (Eq, Ord, Show)
 
@@ -101,6 +107,8 @@ data Index = Index
   -- ^ The name of the table.
   , _indexColumns :: [ColumnName]
   -- ^ The name of the columns in the index.
+  , _indexData    :: TreeMap [Atom] PrimaryKey
+  -- ^ The data in the table.
   }
   deriving (Eq, Ord, Show)
 
@@ -136,6 +144,7 @@ data StatementResult
   | StatementResultFailure StatementFailureCode
   deriving (Eq, Ord, Show)
 
+makePrisms ''PrimaryKey
 makeLenses ''ColumnDefinition
 makeLenses ''Table
 makeLenses ''Index
@@ -181,26 +190,28 @@ instance FromJSON ColumnDefinition where
     ColumnDefinition <$> obj .: "name" <*> obj .: "types"
 
 instance ToJSON Table where
-  toJSON (Table name definition rows) = object
+  toJSON (Table name definition rows nextPrimaryKey) = object
     [ "name" .= name
     , "definition" .= definition
     , "rows" .= rows
+    , "nextPrimaryKey" .= nextPrimaryKey
     ]
 
 instance FromJSON Table where
   parseJSON = withObject "Table" $ \ obj ->
-    Table <$> obj .: "name" <*> obj .: "definition" <*> obj .: "rows"
+    Table <$> obj .: "name" <*> obj .: "definition" <*> obj .: "rows" <*> obj .: "nextPrimaryKey"
 
 instance ToJSON Index where
-  toJSON (Index name table columns) = object
+  toJSON (Index name table columns contents) = object
     [ "name" .= name
     , "table" .= table
     , "columns" .= columns
+    , "data" .= contents
     ]
 
 instance FromJSON Index where
   parseJSON = withObject "Index" $ \ obj ->
-    Index <$> obj .: "name" <*> obj .: "table" <*> obj .: "columns"
+    Index <$> obj .: "name" <*> obj .: "table" <*> obj .: "columns" <*> obj .: "data"
 
 instance ToJSON Database where
   toJSON (Database tables indices) = object
@@ -217,3 +228,6 @@ toAtomType = \ case
   AtomInt _ -> AtomTypeInt
   AtomString _ -> AtomTypeString
   AtomBool _ -> AtomTypeBool
+
+initPrimaryKey :: PrimaryKey
+initPrimaryKey = PrimaryKey 1

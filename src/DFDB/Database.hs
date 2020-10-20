@@ -32,16 +32,22 @@ runInner mx = runExceptT mx >>= \ case
   Left code -> pure $ DFDB.Types.StatementResultFailure code
   Right output -> pure $ DFDB.Types.StatementResultSuccess output
 
+select :: MonadError DFDB.Types.StatementFailureCode m => DFDB.Types.Table -> [DFDB.Types.ColumnName] -> m (DFDB.Tree.TreeMap DFDB.Types.PrimaryKey [DFDB.Types.Atom])
+select table cols = do
+  let tableName = view DFDB.Types.tableName table
+  columnIndices <- for cols $ \ col -> case elemIndex col (toListOf (DFDB.Types.tableDefinition . each . DFDB.Types.columnDefinitionName) table) of
+    Nothing -> throwError $ DFDB.Types.StatementFailureCodeSyntaxError $ "Column " <> DFDB.Types.unColumnName col <> " does not exist in " <> DFDB.Types.unTableName tableName
+    Just c -> pure c
+  pure $ flip DFDB.Tree.mapValues (view DFDB.Types.tableRows table) $ \ (DFDB.Types.Row atoms) -> flip map columnIndices $ \ columnIndex -> atoms !! columnIndex
+
 execute :: MonadState DFDB.Types.Database m => DFDB.Types.Statement -> m DFDB.Types.StatementResult
 execute = \ case
   -- execute a select
   DFDB.Types.StatementSelect cols tableName -> runInner $ do
     table <- getTableOrFail tableName
-    columnIndices <- for cols $ \ col -> case elemIndex col (toListOf (DFDB.Types.tableDefinition . each . DFDB.Types.columnDefinitionName) table) of
-      Nothing -> throwError $ DFDB.Types.StatementFailureCodeSyntaxError $ "Column " <> DFDB.Types.unColumnName col <> " does not exist in " <> DFDB.Types.unTableName tableName
-      Just c -> pure c
-    let rows = flip DFDB.Tree.map (view DFDB.Types.tableRows table) $ \ (DFDB.Types.Row atoms) -> flip map columnIndices $ \ columnIndex -> atoms !! columnIndex
-    pure . DFDB.Types.Output . unlines . map (decodeUtf8 . toStrict . encode) . DFDB.Tree.toList $ rows
+    -- FIXME use index
+    rows <- select table cols
+    pure . DFDB.Types.Output . unlines . map (decodeUtf8 . toStrict . encode . snd) . DFDB.Tree.mapToList $ rows
 
   -- execute an insert
   DFDB.Types.StatementInsert row tableName -> runInner $ do
@@ -56,14 +62,20 @@ execute = \ case
           in case DFDB.Types.toAtomType atom == atomType of
             True -> pure ()
             False -> throwError $ DFDB.Types.StatementFailureCodeSyntaxError $ "Column " <> DFDB.Types.unColumnName column <> " (" <> tshow atom <> ") is not a " <> tshow atomType
-        assign (DFDB.Types.databaseTables . at tableName . _Just) (over DFDB.Types.tableRows (DFDB.Tree.insert row) table)
+        let nextPrimaryKey = view DFDB.Types.tableNextPrimaryKey table
+        -- FIXME fixup indices
+        assign (DFDB.Types.databaseTables . at tableName . _Just)
+          ( over DFDB.Types.tableRows (DFDB.Tree.insertMap nextPrimaryKey row)
+              . over (DFDB.Types.tableNextPrimaryKey . DFDB.Types._PrimaryKey) (+1)
+              $ table
+          )
         pure $ DFDB.Types.Output "INSERT 1"
 
   -- execute a create table
   DFDB.Types.StatementCreate tableName cols -> runInner $ do
     use (DFDB.Types.databaseTables . at tableName) >>= \ case
       Nothing -> do
-        modifying DFDB.Types.databaseTables (insertMap tableName $ DFDB.Types.Table tableName cols DFDB.Tree.empty)
+        modifying DFDB.Types.databaseTables (insertMap tableName $ DFDB.Types.Table tableName cols DFDB.Tree.empty DFDB.Types.initPrimaryKey)
         pure $ DFDB.Types.Output "CREATE TABLE"
       Just _ -> throwError $ DFDB.Types.StatementFailureCodeSyntaxError "Table already exists"
 
@@ -79,7 +91,8 @@ execute = \ case
     unless (null extraColumns) $ throwError $ DFDB.Types.StatementFailureCodeSyntaxError $ "Columns " <> extraColumns <> " not in table"
     use (DFDB.Types.databaseIndices . at indexName) >>= \ case
       Nothing -> do
-        modifying DFDB.Types.databaseIndices (insertMap indexName $ DFDB.Types.Index indexName tableName cols)
+        contents <- DFDB.Tree.map swap <$> select table cols
+        modifying DFDB.Types.databaseIndices (insertMap indexName $ DFDB.Types.Index indexName tableName cols contents)
         pure $ DFDB.Types.Output "CREATE INDEX"
       Just _ -> throwError $ DFDB.Types.StatementFailureCodeSyntaxError "Index already exists"
 
