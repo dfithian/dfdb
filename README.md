@@ -54,6 +54,6 @@ dfdb > :q
 - [x] primary keys
 - [ ] foreign keys
 - [x] indexes
-- [ ] query planning
+- [x] query planning
 - [x] autocommit transactions
 - [ ] transactions
