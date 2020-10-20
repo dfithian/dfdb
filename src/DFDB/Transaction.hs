@@ -1,17 +1,19 @@
 module DFDB.Transaction
-  ( Transaction(Transaction), runTransaction
+  ( Transaction'(Transaction), Transaction, runTransaction
   ) where
 
 import ClassyPrelude
 import Control.Monad.Except (Except, runExcept)
-import Control.Monad.State (MonadState, StateT, get, runStateT, put)
+import Control.Monad.State (MonadState, StateT, get, put, runStateT)
 
 import qualified DFDB.Types
 
-newtype Transaction a = Transaction (StateT DFDB.Types.Database (Except DFDB.Types.StatementFailureCode) a)
+newtype Transaction' s e a = Transaction (StateT s (Except e) a)
   deriving (Functor, Applicative, Monad)
 
-runTransaction :: (MonadState DFDB.Types.Database m) => Transaction a -> m (Either DFDB.Types.StatementFailureCode a)
+type Transaction = Transaction' DFDB.Types.Database DFDB.Types.StatementFailureCode
+
+runTransaction :: (MonadState s m) => Transaction' s e a -> m (Either e a)
 runTransaction (Transaction mx) = do
   pre <- get
   let result = runExcept $ runStateT mx pre
