@@ -1,9 +1,9 @@
 module DFDB.TransactionSpec where
 
 import ClassyPrelude
+import Control.Monad.Except (Except, throwError)
+import Control.Monad.State (StateT, modify, runState)
 import Test.Hspec (Spec, describe, it, shouldBe)
-import Control.Monad.Except (throwError, Except)
-import Control.Monad.State (runState, modify, StateT)
 
 import qualified DFDB.Transaction as Transaction
 
