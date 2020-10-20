@@ -1,6 +1,6 @@
 module DFDB.Statement where
 
-import ClassyPrelude
+import ClassyPrelude hiding (index)
 import Prelude (read)
 import qualified Data.Attoparsec.ByteString as Atto
 import qualified Data.ByteString.Char8 as C8
@@ -80,6 +80,9 @@ columnDefinitions = list columnDefinition
 table :: Atto.Parser DFDB.Types.TableName
 table = DFDB.Types.TableName . decodeUtf8 <$> alphaOrUnderscore
 
+index :: Atto.Parser DFDB.Types.IndexName
+index = DFDB.Types.IndexName . decodeUtf8 <$> alphaOrUnderscore
+
 parseStatement :: Atto.Parser DFDB.Types.ParsedStatement
 parseStatement =
   (DFDB.Types.ParsedStatementHelp <$ keyword "help")
@@ -87,6 +90,8 @@ parseStatement =
             <$> ( (DFDB.Types.StatementSelect <$ keyword "select" <*> columnNames <*> table <* spaces <* Atto.string ";" <* Atto.takeByteString)
                      <|> (DFDB.Types.StatementInsert <$ keyword "insert" <*> row <*> table <* spaces <* Atto.string ";" <* Atto.takeByteString)
                      <|> (DFDB.Types.StatementCreate <$ keyword "create table" <*> table <*> columnDefinitions <* spaces <* Atto.string ";" <* Atto.takeByteString)
+                     <|> (DFDB.Types.StatementCreateIndex <$ keyword "create index" <*> index <*> table <*> columnNames <* spaces <* Atto.string ";" <* Atto.takeByteString)
                      <|> (DFDB.Types.StatementDrop <$ keyword "drop table" <*> table <* spaces <* Atto.string ";" <* Atto.takeByteString)
+                     <|> (DFDB.Types.StatementDropIndex <$ keyword "drop index" <*> index <* spaces <* Atto.string ";" <* Atto.takeByteString)
                 )
         )

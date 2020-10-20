@@ -11,7 +11,7 @@ import qualified DFDB.Tree
 import qualified DFDB.Types
 
 emptyDatabase :: DFDB.Types.Database
-emptyDatabase = DFDB.Types.Database mempty
+emptyDatabase = DFDB.Types.Database mempty mempty
 
 getTable :: MonadState DFDB.Types.Database m => DFDB.Types.TableName -> m (Maybe DFDB.Types.Table)
 getTable tableName = use (DFDB.Types.databaseTables . at tableName)
@@ -19,6 +19,13 @@ getTable tableName = use (DFDB.Types.databaseTables . at tableName)
 getTableOrFail :: (MonadError DFDB.Types.StatementFailureCode m, MonadState DFDB.Types.Database m) => DFDB.Types.TableName -> m DFDB.Types.Table
 getTableOrFail tableName = maybe (throwError (DFDB.Types.StatementFailureCodeSyntaxError "Table does not exist")) pure
   =<< getTable tableName
+
+getIndex :: MonadState DFDB.Types.Database m => DFDB.Types.IndexName -> m (Maybe DFDB.Types.Index)
+getIndex indexName = use (DFDB.Types.databaseIndices . at indexName)
+
+getIndexOrFail :: (MonadError DFDB.Types.StatementFailureCode m, MonadState DFDB.Types.Database m) => DFDB.Types.IndexName -> m DFDB.Types.Index
+getIndexOrFail indexName = maybe (throwError (DFDB.Types.StatementFailureCodeSyntaxError "Index does not exist")) pure
+  =<< getIndex indexName
 
 runInner :: Monad m => ExceptT DFDB.Types.StatementFailureCode m DFDB.Types.Output -> m DFDB.Types.StatementResult
 runInner mx = runExceptT mx >>= \ case
@@ -60,8 +67,30 @@ execute = \ case
         pure $ DFDB.Types.Output "CREATE TABLE"
       Just _ -> throwError $ DFDB.Types.StatementFailureCodeSyntaxError "Table already exists"
 
+  -- execute a create index
+  DFDB.Types.StatementCreateIndex indexName tableName cols -> runInner $ do
+    table <- use (DFDB.Types.databaseTables . at tableName) >>= \ case
+      Nothing -> throwError $ DFDB.Types.StatementFailureCodeSyntaxError "Table does not exist"
+      Just t -> pure t
+    let extraColumns =
+          intercalate ", " . map DFDB.Types.unColumnName . setToList . difference (setFromList cols)
+            . asSet . setFromList . toListOf (DFDB.Types.tableDefinition . each . DFDB.Types.columnDefinitionName)
+            $ table
+    unless (null extraColumns) $ throwError $ DFDB.Types.StatementFailureCodeSyntaxError $ "Columns " <> extraColumns <> " not in table"
+    use (DFDB.Types.databaseIndices . at indexName) >>= \ case
+      Nothing -> do
+        modifying DFDB.Types.databaseIndices (insertMap indexName $ DFDB.Types.Index indexName tableName cols)
+        pure $ DFDB.Types.Output "CREATE INDEX"
+      Just _ -> throwError $ DFDB.Types.StatementFailureCodeSyntaxError "Index already exists"
+
   -- execute a table drop
   DFDB.Types.StatementDrop tableName -> runInner $ do
     void $ getTableOrFail tableName
     modifying DFDB.Types.databaseTables (deleteMap tableName)
     pure $ DFDB.Types.Output "DROP TABLE"
+
+  -- execute an index drop
+  DFDB.Types.StatementDropIndex indexName -> runInner $ do
+    void $ getIndexOrFail indexName
+    modifying DFDB.Types.databaseIndices (deleteMap indexName)
+    pure $ DFDB.Types.Output "DROP INDEX"

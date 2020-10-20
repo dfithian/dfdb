@@ -1,6 +1,6 @@
 module DFDB.Types where
 
-import ClassyPrelude
+import ClassyPrelude hiding (Index)
 import Control.Lens.TH (makeLenses)
 import Control.Monad (fail)
 import Data.Aeson
@@ -89,9 +89,25 @@ data Table = Table
   }
   deriving (Eq, Ord, Show)
 
+-- |Name of an index.
+newtype IndexName = IndexName { unIndexName :: Text }
+  deriving (Eq, Ord, Show, ToJSON, FromJSON, ToJSONKey, FromJSONKey)
+
+-- |An index, including its name, table, and definition.
+data Index = Index
+  { _indexName    :: IndexName
+  -- ^ The name of the index.
+  , _indexTable   :: TableName
+  -- ^ The name of the table.
+  , _indexColumns :: [ColumnName]
+  -- ^ The name of the columns in the index.
+  }
+  deriving (Eq, Ord, Show)
+
 -- |Our in-memory database.
 data Database = Database
-  { _databaseTables :: Map TableName Table
+  { _databaseTables  :: Map TableName Table
+  , _databaseIndices :: Map IndexName Index
   }
   deriving (Eq, Ord, Show)
 
@@ -100,7 +116,9 @@ data Statement
   = StatementSelect [ColumnName] TableName
   | StatementInsert Row TableName
   | StatementCreate TableName [ColumnDefinition]
+  | StatementCreateIndex IndexName TableName [ColumnName]
   | StatementDrop TableName
+  | StatementDropIndex IndexName
   deriving (Eq, Ord, Show)
 
 -- |A statement failed to execute.
@@ -120,6 +138,7 @@ data StatementResult
 
 makeLenses ''ColumnDefinition
 makeLenses ''Table
+makeLenses ''Index
 makeLenses ''Database
 
 instance ToJSON AtomType where
@@ -172,14 +191,26 @@ instance FromJSON Table where
   parseJSON = withObject "Table" $ \ obj ->
     Table <$> obj .: "name" <*> obj .: "definition" <*> obj .: "rows"
 
+instance ToJSON Index where
+  toJSON (Index name table columns) = object
+    [ "name" .= name
+    , "table" .= table
+    , "columns" .= columns
+    ]
+
+instance FromJSON Index where
+  parseJSON = withObject "Index" $ \ obj ->
+    Index <$> obj .: "name" <*> obj .: "table" <*> obj .: "columns"
+
 instance ToJSON Database where
-  toJSON (Database tables) = object
+  toJSON (Database tables indices) = object
     [ "tables" .= tables
+    , "indices" .= indices
     ]
 
 instance FromJSON Database where
   parseJSON = withObject "Database" $ \ obj ->
-    Database <$> obj .: "tables"
+    Database <$> obj .: "tables" <*> obj .: "indices"
 
 toAtomType :: Atom -> AtomType
 toAtomType = \ case
