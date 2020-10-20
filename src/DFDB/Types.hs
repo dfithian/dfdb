@@ -12,31 +12,31 @@ import DFDB.Tree (TreeMap)
 
 -- |User input.
 newtype Command = Command { unCommand :: Text }
-  deriving (Eq, Ord, Show)
+  deriving (Eq, Ord, Show, Generic)
 
 -- |Failure to parse a command.
 data CommandFailureCode
   = CommandFailureCodeParser Text
-  deriving (Eq, Ord, Show)
+  deriving (Eq, Ord, Show, Generic)
 
 -- |Success parsing a command.
 data ParsedStatement
   = ParsedStatementHelp
   | ParsedStatement Statement
-  deriving (Eq, Ord, Show)
+  deriving (Eq, Ord, Show, Generic)
 
 -- |Result of parsing a command.
 data CommandOutput
   = CommandOutputSuccess ParsedStatement
   | CommandOutputFailure CommandFailureCode
-  deriving (Eq, Ord, Show)
+  deriving (Eq, Ord, Show, Generic)
 
 -- |Meta type for an atom (primitive).
 data AtomType
   = AtomTypeInt
   | AtomTypeString
   | AtomTypeBool
-  deriving (Eq, Ord)
+  deriving (Eq, Ord, Generic)
 
 instance Show AtomType where
   show = \ case
@@ -49,7 +49,7 @@ data Atom
   = AtomInt Int
   | AtomString Text
   | AtomBool Bool
-  deriving (Eq, Ord)
+  deriving (Eq, Ord, Generic)
 
 instance Show Atom where
   show = \ case
@@ -59,15 +59,15 @@ instance Show Atom where
 
 -- |A primary key.
 newtype PrimaryKey = PrimaryKey { unPrimaryKey :: Int }
-  deriving (Eq, Ord, Show, ToJSON, FromJSON)
+  deriving (Eq, Ord, Show, Generic, ToJSON, FromJSON)
 
 -- |A row of values in a table.
 newtype Row = Row { unRow :: [Atom] }
-  deriving (Eq, Ord, Show)
+  deriving (Eq, Ord, Show, Generic)
 
 -- |The name of a column in a table, used for querying.
 newtype ColumnName = ColumnName { unColumnName :: Text }
-  deriving (Eq, Ord, Show, ToJSON, FromJSON)
+  deriving (Eq, Ord, Show, Generic, ToJSON, FromJSON)
 
 -- |Column definition in a table.
 data ColumnDefinition = ColumnDefinition
@@ -76,11 +76,11 @@ data ColumnDefinition = ColumnDefinition
   , _columnDefinitionType :: AtomType
   -- ^ Type of the column.
   }
-  deriving (Eq, Ord, Show)
+  deriving (Eq, Ord, Show, Generic)
 
 -- |Name of a table, used for creating/querying/inserting.
 newtype TableName = TableName { unTableName :: Text }
-  deriving (Eq, Ord, Show, ToJSON, FromJSON, ToJSONKey, FromJSONKey)
+  deriving (Eq, Ord, Show, Generic, ToJSON, FromJSON, ToJSONKey, FromJSONKey)
 
 -- |A table, including its name, definition, and data.
 data Table = Table
@@ -95,11 +95,11 @@ data Table = Table
   , _tableIndices        :: [IndexName]
   -- ^ Indices for the table.
   }
-  deriving (Eq, Ord, Show)
+  deriving (Eq, Ord, Show, Generic)
 
 -- |Name of an index.
 newtype IndexName = IndexName { unIndexName :: Text }
-  deriving (Eq, Ord, Show, ToJSON, FromJSON, ToJSONKey, FromJSONKey)
+  deriving (Eq, Ord, Show, Generic, ToJSON, FromJSON, ToJSONKey, FromJSONKey)
 
 -- |An index, including its name, table, and definition.
 data Index = Index
@@ -112,14 +112,14 @@ data Index = Index
   , _indexData    :: TreeMap [Atom] [Row]
   -- ^ The data in the table.
   }
-  deriving (Eq, Ord, Show)
+  deriving (Eq, Ord, Show, Generic)
 
 -- |Our in-memory database.
 data Database = Database
   { _databaseTables  :: Map TableName Table
   , _databaseIndices :: Map IndexName Index
   }
-  deriving (Eq, Ord, Show)
+  deriving (Eq, Ord, Show, Generic)
 
 -- |A where filter.
 data WhereClause = WhereClause
@@ -128,7 +128,7 @@ data WhereClause = WhereClause
   , _whereClauseValue      :: Atom
   -- ^ The value this applies to.
   }
-  deriving (Eq, Ord, Show)
+  deriving (Eq, Ord, Show, Generic)
 
 -- |A statement to execute against a 'Database'.
 data Statement
@@ -139,23 +139,23 @@ data Statement
   | StatementCreateIndex IndexName TableName [ColumnName]
   | StatementDrop TableName
   | StatementDropIndex IndexName
-  deriving (Eq, Ord, Show)
+  deriving (Eq, Ord, Show, Generic)
 
 -- |A statement failed to execute.
 data StatementFailureCode
   = StatementFailureCodeSyntaxError Text
   | StatementFailureCodeInternalError Text
-  deriving (Eq, Ord, Show)
+  deriving (Eq, Ord, Show, Generic)
 
 -- |An executed statement's output.
 newtype Output = Output { unOutput :: Text }
-  deriving (Eq, Ord, Show)
+  deriving (Eq, Ord, Show, Generic)
 
 -- |The result of running a statement.
 data StatementResult
   = StatementResultSuccess Output
   | StatementResultFailure StatementFailureCode
-  deriving (Eq, Ord, Show)
+  deriving (Eq, Ord, Show, Generic)
 
 makePrisms ''PrimaryKey
 makeLenses ''ColumnDefinition

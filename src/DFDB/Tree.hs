@@ -14,7 +14,7 @@ import Data.Aeson (Value(Null, String), (.:), (.=), FromJSON, ToJSON, object, pa
 import qualified Data.List as List
 
 data Color = Red | Black
-  deriving (Eq, Ord)
+  deriving (Eq, Ord, Generic)
 
 instance Show Color where
   show = \ case
@@ -33,7 +33,7 @@ instance FromJSON Color where
     other -> fail $ "Unknown color " <> unpack other
 
 data TreeMap a b = Node !a !b Color !(TreeMap a b) !(TreeMap a b) | Nil
-  deriving (Eq, Ord)
+  deriving (Eq, Ord, Generic)
 
 type Tree a = TreeMap a ()
 

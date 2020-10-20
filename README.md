@@ -15,7 +15,7 @@ dfdb > create table foo (string string, int int, bool bool,);
 CREATE TABLE
 dfdb > insert ('string', 1, true,) foo;
 INSERT 1
-dfdb > select (string, int,) foo;
+dfdb > select (string, int,) foo where (int = 1,);
 ["string",1]
 
 dfdb > create index foo_int foo (int,);

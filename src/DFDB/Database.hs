@@ -49,20 +49,44 @@ getTableIndices table =
       =<< use (DFDB.Types.databaseIndices . at indexName) )
     $ view DFDB.Types.tableIndices table
 
+-- |Simple implementation of a query planner. Check the index, and if it matches the where clause exactly use it.
 select :: (MonadState DFDB.Types.Database m, MonadError DFDB.Types.StatementFailureCode m)
   => DFDB.Types.Table -> [DFDB.Types.ColumnName] -> [DFDB.Types.WhereClause]
   -> m [[DFDB.Types.Atom]]
 select table cols wheres = do
   let whereColumns = toListOf (each . DFDB.Types.whereClauseColumn) wheres
-      whereValues = toListOf (each . DFDB.Types.whereClauseValue) wheres
   tableIndexMay <- headMay . filter ((==) whereColumns . view DFDB.Types.indexColumns) <$> getTableIndices table
+  maybe (selectTableScan table cols wheres) (\ index -> selectIndex table index cols wheres) tableIndexMay
+
+selectIndex :: (MonadState DFDB.Types.Database m, MonadError DFDB.Types.StatementFailureCode m)
+  => DFDB.Types.Table -> DFDB.Types.Index -> [DFDB.Types.ColumnName] -> [DFDB.Types.WhereClause]
+  -> m [[DFDB.Types.Atom]]
+selectIndex table index cols wheres = do
+  let whereColumns = toListOf (each . DFDB.Types.whereClauseColumn) wheres
+      whereValues = toListOf (each . DFDB.Types.whereClauseValue) wheres
   columnIndices <- getColumnIndices table cols
-  let rows = case tableIndexMay of
-        Nothing -> filter (\ (DFDB.Types.Row atoms) -> map ((!!) atoms) columnIndices == whereValues) . map snd . DFDB.Tree.mapToList . view DFDB.Types.tableRows $ table
-        Just tableIndex -> fromMaybe mempty . DFDB.Tree.lookup whereValues . view DFDB.Types.indexData $ tableIndex
-  pure . flip map rows $ \ (DFDB.Types.Row atoms) ->
-    flip map columnIndices $
-      (!!) atoms
+  pure
+    . map (\ (DFDB.Types.Row atoms) -> map ((!!) atoms) columnIndices)
+    . fromMaybe mempty
+    . DFDB.Tree.lookup whereValues
+    . view DFDB.Types.indexData
+    $ index
+
+selectTableScan :: (MonadState DFDB.Types.Database m, MonadError DFDB.Types.StatementFailureCode m)
+  => DFDB.Types.Table -> [DFDB.Types.ColumnName] -> [DFDB.Types.WhereClause]
+  -> m [[DFDB.Types.Atom]]
+selectTableScan table cols wheres = do
+  let whereColumns = toListOf (each . DFDB.Types.whereClauseColumn) wheres
+      whereValues = toListOf (each . DFDB.Types.whereClauseValue) wheres
+  columnIndices <- getColumnIndices table cols
+  whereColumnIndices <- getColumnIndices table whereColumns
+  pure
+    . map (\ (DFDB.Types.Row atoms) -> map ((!!) atoms) columnIndices)
+    . filter (\ (DFDB.Types.Row atoms) -> map ((!!) atoms) whereColumnIndices == whereValues)
+    . map snd
+    . DFDB.Tree.mapToList
+    . view DFDB.Types.tableRows
+    $ table
 
 execute :: MonadState DFDB.Types.Database m => DFDB.Types.Statement -> m DFDB.Types.StatementResult
 execute = \ case
@@ -98,7 +122,7 @@ execute = \ case
             Just index -> do
               columnIndices <- getColumnIndices table . view DFDB.Types.indexColumns $ index
               assign (DFDB.Types.databaseIndices . at indexName . _Just)
-                ( over DFDB.Types.indexData (DFDB.Tree.insertMapWith (<>) (flip map columnIndices $ (!!) atoms) [row])
+                ( over DFDB.Types.indexData (DFDB.Tree.insertMapWith (<>) (map ((!!) atoms) columnIndices) [row])
                     $ index
                 )
         pure $ DFDB.Types.Output "INSERT 1"
@@ -128,7 +152,7 @@ execute = \ case
       Nothing -> do
         columnIndices <- getColumnIndices table cols
         let contents = DFDB.Tree.mapFromListWith (<>)
-              . map (\ (_, row@(DFDB.Types.Row atoms)) -> (flip map columnIndices $ (!!) atoms, [row]))
+              . map (\ (_, row@(DFDB.Types.Row atoms)) -> (map ((!!) atoms) columnIndices, [row]))
               . DFDB.Tree.mapToList
               . view DFDB.Types.tableRows
               $ table

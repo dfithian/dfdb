@@ -6,7 +6,6 @@ copyright: 2020 Dan Fithian
 
 ghc-options:
   - -Wall
-  - -Werror
   - -fwarn-tabs
   - -Wincomplete-uni-patterns
   - -eventlog
@@ -71,6 +70,19 @@ executables:
       - dfdb
     ghc-options:
       - -optP-Wno-nonportable-include-path
+      - -threaded
+      - -rtsopts
+      - '"-with-rtsopts=-N -T"'
+
+  index-bench:
+    main: index-bench.hs
+    source-dirs:
+      - app
+    dependencies:
+      - criterion
+      - QuickCheck
+      - dfdb
+    ghc-options:
       - -threaded
       - -rtsopts
       - '"-with-rtsopts=-N -T"'
