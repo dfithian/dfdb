@@ -1,13 +1,13 @@
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 import ClassyPrelude hiding (index)
-import Criterion.Main (bench, bgroup, defaultMain, env, nf)
-import Test.QuickCheck (generate, Gen, arbitrary, listOf1, choose, elements, vectorOf)
 import Control.Monad.Except (runExcept)
 import Control.Monad.State (runStateT)
+import Criterion.Main (bench, bgroup, defaultMain, env, nf)
+import Test.QuickCheck (Gen, arbitrary, choose, elements, generate, listOf1, vectorOf)
 
-import DFDB.Database (selectTableScan, selectIndex)
-import qualified DFDB.Types
+import DFDB.Database (selectIndex, selectTableScan)
 import qualified DFDB.Tree
+import qualified DFDB.Types
 
 instance NFData DFDB.Tree.Color
 instance (NFData a, NFData b) => NFData (DFDB.Tree.TreeMap a b)
