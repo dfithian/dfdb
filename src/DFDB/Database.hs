@@ -62,8 +62,7 @@ selectIndex :: (MonadState DFDB.Types.Database m, MonadError DFDB.Types.Statemen
   => DFDB.Types.Table -> DFDB.Types.Index -> [DFDB.Types.ColumnName] -> [DFDB.Types.WhereClause]
   -> m [[DFDB.Types.Atom]]
 selectIndex table index cols wheres = do
-  let whereColumns = toListOf (each . DFDB.Types.whereClauseColumn) wheres
-      whereValues = toListOf (each . DFDB.Types.whereClauseValue) wheres
+  let whereValues = toListOf (each . DFDB.Types.whereClauseValue) wheres
   columnIndices <- getColumnIndices table cols
   pure
     . map (\ (DFDB.Types.Row atoms) -> map ((!!) atoms) columnIndices)

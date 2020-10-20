@@ -1,6 +1,6 @@
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 import ClassyPrelude hiding (index)
-import Criterion.Main (bench, bgroup, defaultMain, env, whnf)
+import Criterion.Main (bench, bgroup, defaultMain, env, nf)
 import Test.QuickCheck (generate, Gen, arbitrary, listOf1, choose, elements, vectorOf)
 import Control.Monad.Except (runExcept)
 import Control.Monad.State (runStateT)
@@ -70,10 +70,11 @@ genDatabase n = generate $ do
       peopleByAge = DFDB.Tree.mapFromListWith (<>) $ flip map allTraits $ \ traits@(_, age, _) -> ([age], [toPerson traits])
   pure (peopleTable peopleByPKey, ageIndex peopleByAge, oneTrait)
 
-runTest :: DFDB.Types.Table -> Maybe DFDB.Types.Index -> [DFDB.Types.WhereClause] -> ()
-runTest table indexMay wheres =
+runTest :: DFDB.Types.Table -> Maybe DFDB.Types.Index -> DFDB.Types.Atom -> ()
+runTest table indexMay age =
   let db = DFDB.Types.Database (singletonMap peopleTableName table) (maybe mempty (singletonMap ageIndexName) indexMay)
       cols = [nameColumnName, ageColumnName, likesDogsColumnName]
+      wheres = [DFDB.Types.WhereClause ageColumnName age]
       result = runExcept
         . flip runStateT db
         . maybe (selectTableScan table cols wheres) (\ index -> selectIndex table index cols wheres)
@@ -85,15 +86,15 @@ runTest table indexMay wheres =
 main :: IO ()
 main = defaultMain
   [ env (genDatabase 10000) $ \ ~(table, index, (_, age, _)) -> bgroup "select - 10000"
-      [ bench "no index" $ whnf (runTest table Nothing) [DFDB.Types.WhereClause ageColumnName age]
-      , bench "using index" $ whnf (runTest table $ Just index) [DFDB.Types.WhereClause ageColumnName age]
+      [ bench "no index" $ nf (runTest table Nothing) age
+      , bench "using index" $ nf (runTest table $ Just index) age
       ]
   , env (genDatabase 100000) $ \ ~(table, index, (_, age, _)) -> bgroup "select - 100000"
-      [ bench "no index" $ whnf (runTest table Nothing) [DFDB.Types.WhereClause ageColumnName age]
-      , bench "using index" $ whnf (runTest table $ Just index) [DFDB.Types.WhereClause ageColumnName age]
+      [ bench "no index" $ nf (runTest table Nothing) age
+      , bench "using index" $ nf (runTest table $ Just index) age
       ]
   , env (genDatabase 200000) $ \ ~(table, index, (_, age, _)) -> bgroup "select - 200000"
-      [ bench "no index" $ whnf (runTest table Nothing) [DFDB.Types.WhereClause ageColumnName age]
-      , bench "using index" $ whnf (runTest table $ Just index) [DFDB.Types.WhereClause ageColumnName age]
+      [ bench "no index" $ nf (runTest table Nothing) age
+      , bench "using index" $ nf (runTest table $ Just index) age
       ]
   ]
