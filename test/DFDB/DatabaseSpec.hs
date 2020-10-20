@@ -1,10 +1,10 @@
 module DFDB.DatabaseSpec where
 
 import ClassyPrelude
-import Data.List.NonEmpty (NonEmpty((:|)))
-import qualified Data.List.NonEmpty as NonEmpty
 import Control.Monad.State (State, runState)
-import Test.Hspec (Expectation, HasCallStack, Spec, describe, it, shouldBe, expectationFailure)
+import Data.List.NonEmpty (NonEmpty((:|)))
+import Test.Hspec (Expectation, HasCallStack, Spec, describe, expectationFailure, it, shouldBe)
+import qualified Data.List.NonEmpty as NonEmpty
 
 import qualified DFDB.Database as Database
 import qualified DFDB.Tree
