@@ -58,6 +58,7 @@ select table cols wheres = do
   tableIndexMay <- headMay . filter ((==) whereColumns . view DFDB.Types.indexColumns) <$> getTableIndices table
   maybe (selectTableScan table cols wheres) (\ index -> selectIndex table index cols wheres) tableIndexMay
 
+-- |Select using an index.
 selectIndex :: (MonadState DFDB.Types.Database m, MonadError DFDB.Types.StatementFailureCode m)
   => DFDB.Types.Table -> DFDB.Types.Index -> [DFDB.Types.ColumnName] -> [DFDB.Types.WhereClause]
   -> m [[DFDB.Types.Atom]]
@@ -71,6 +72,7 @@ selectIndex table index cols wheres = do
     . view DFDB.Types.indexData
     $ index
 
+-- |Select using a whole table scan.
 selectTableScan :: (MonadState DFDB.Types.Database m, MonadError DFDB.Types.StatementFailureCode m)
   => DFDB.Types.Table -> [DFDB.Types.ColumnName] -> [DFDB.Types.WhereClause]
   -> m [[DFDB.Types.Atom]]

@@ -60,8 +60,10 @@ arbitraryString = DFDB.Types.AtomString <$> nonEmptyArbitraryAlphaNumericText
 arbitraryInt = DFDB.Types.AtomInt <$> choose (0, 100)
 arbitraryBool = DFDB.Types.AtomBool <$> arbitrary
 
-genDatabase :: Int -> IO (DFDB.Types.Table, DFDB.Types.Index, (DFDB.Types.Atom, DFDB.Types.Atom, DFDB.Types.Atom))
-genDatabase n = generate $ do
+-- |Generate `n` rows of the `people` table, index by age, and return a row that's in the data set to use to benchmark a
+-- query.
+genData :: Int -> IO (DFDB.Types.Table, DFDB.Types.Index, (DFDB.Types.Atom, DFDB.Types.Atom, DFDB.Types.Atom))
+genData n = generate $ do
   let genTraits = (,,) <$> arbitraryString <*> arbitraryInt <*> arbitraryBool
       toPerson (name, age, likesDogs) = DFDB.Types.Row [name, age, likesDogs]
   oneTrait <- genTraits
@@ -70,6 +72,7 @@ genDatabase n = generate $ do
       peopleByAge = DFDB.Tree.mapFromListWith (<>) $ flip map allTraits $ \ traits@(_, age, _) -> ([age], [toPerson traits])
   pure (peopleTable peopleByPKey, ageIndex peopleByAge, oneTrait)
 
+-- |Run a test. If the index is provided, query using the index. Filter using the provided atom in the `where` clause.
 runTest :: DFDB.Types.Table -> Maybe DFDB.Types.Index -> DFDB.Types.Atom -> ()
 runTest table indexMay age =
   let db = DFDB.Types.Database (singletonMap peopleTableName table) (maybe mempty (singletonMap ageIndexName) indexMay)
@@ -85,15 +88,15 @@ runTest table indexMay age =
 
 main :: IO ()
 main = defaultMain
-  [ env (genDatabase 10000) $ \ ~(table, index, (_, age, _)) -> bgroup "select - 10000"
+  [ env (genData 10000) $ \ ~(table, index, (_, age, _)) -> bgroup "select - 10000"
       [ bench "no index" $ nf (runTest table Nothing) age
       , bench "using index" $ nf (runTest table $ Just index) age
       ]
-  , env (genDatabase 100000) $ \ ~(table, index, (_, age, _)) -> bgroup "select - 100000"
+  , env (genData 100000) $ \ ~(table, index, (_, age, _)) -> bgroup "select - 100000"
       [ bench "no index" $ nf (runTest table Nothing) age
       , bench "using index" $ nf (runTest table $ Just index) age
       ]
-  , env (genDatabase 200000) $ \ ~(table, index, (_, age, _)) -> bgroup "select - 200000"
+  , env (genData 200000) $ \ ~(table, index, (_, age, _)) -> bgroup "select - 200000"
       [ bench "no index" $ nf (runTest table Nothing) age
       , bench "using index" $ nf (runTest table $ Just index) age
       ]
