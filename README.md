@@ -60,4 +60,4 @@ dfdb > :q
 
 ## Benchmarks
 
-For info about benchmarks, see ![benchmark.pdf](benchmark.pdf).
+For info about benchmarks, see ![benchmark.pdf](benchmark.html).
