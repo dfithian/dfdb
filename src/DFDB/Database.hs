@@ -2,8 +2,7 @@ module DFDB.Database where
 
 import ClassyPrelude hiding (index)
 import Control.Lens (_Just, assign, at, each, modifying, over, toListOf, use, view)
-import Control.Monad.Except (Except, MonadError, throwError)
-import Control.Monad.State (MonadState, StateT)
+import Control.Monad.Except (throwError)
 import Data.Aeson (encode)
 import Data.List ((!!))
 import qualified Data.List as List
@@ -15,33 +14,28 @@ import qualified DFDB.Types
 emptyDatabase :: DFDB.Types.Database
 emptyDatabase = DFDB.Types.Database mempty mempty
 
-getTable :: MonadState DFDB.Types.Database m => DFDB.Types.TableName -> m (Maybe DFDB.Types.Table)
+getTable :: DFDB.Transaction.MonadDatabase m => DFDB.Types.TableName -> m (Maybe DFDB.Types.Table)
 getTable tableName = use (DFDB.Types.databaseTables . at tableName)
 
-getTableOrFail :: (MonadError DFDB.Types.StatementFailureCode m, MonadState DFDB.Types.Database m) => DFDB.Types.TableName -> m DFDB.Types.Table
+getTableOrFail :: DFDB.Transaction.MonadDatabase m => DFDB.Types.TableName -> m DFDB.Types.Table
 getTableOrFail tableName = maybe (throwError (DFDB.Types.StatementFailureCodeSyntaxError "Table does not exist")) pure
   =<< getTable tableName
 
-getIndex :: MonadState DFDB.Types.Database m => DFDB.Types.IndexName -> m (Maybe DFDB.Types.Index)
+getIndex :: DFDB.Transaction.MonadDatabase m => DFDB.Types.IndexName -> m (Maybe DFDB.Types.Index)
 getIndex indexName = use (DFDB.Types.databaseIndices . at indexName)
 
-getIndexOrFail :: (MonadError DFDB.Types.StatementFailureCode m, MonadState DFDB.Types.Database m) => DFDB.Types.IndexName -> m DFDB.Types.Index
+getIndexOrFail :: DFDB.Transaction.MonadDatabase m => DFDB.Types.IndexName -> m DFDB.Types.Index
 getIndexOrFail indexName = maybe (throwError (DFDB.Types.StatementFailureCodeSyntaxError "Index does not exist")) pure
   =<< getIndex indexName
 
-runInner :: MonadState DFDB.Types.Database m => StateT DFDB.Types.Database (Except DFDB.Types.StatementFailureCode) DFDB.Types.Output -> m DFDB.Types.StatementResult
-runInner mx = DFDB.Transaction.runTransaction (DFDB.Transaction.Transaction mx) >>= \ case
-  Left code -> pure $ DFDB.Types.StatementResultFailure code
-  Right output -> pure $ DFDB.Types.StatementResultSuccess output
-
-getColumnIndices :: MonadError DFDB.Types.StatementFailureCode m => DFDB.Types.Table -> [DFDB.Types.ColumnName] -> m [Int]
+getColumnIndices :: DFDB.Transaction.MonadDatabase m => DFDB.Types.Table -> [DFDB.Types.ColumnName] -> m [Int]
 getColumnIndices table cols = do
   let tableName = view DFDB.Types.tableName table
   for cols $ \ col -> case List.elemIndex col (toListOf (DFDB.Types.tableDefinition . each . DFDB.Types.columnDefinitionName) table) of
     Nothing -> throwError $ DFDB.Types.StatementFailureCodeSyntaxError $ "Column " <> DFDB.Types.unColumnName col <> " does not exist in " <> DFDB.Types.unTableName tableName
     Just c -> pure c
 
-getTableIndices :: (MonadState DFDB.Types.Database m, MonadError DFDB.Types.StatementFailureCode m) => DFDB.Types.Table -> m [DFDB.Types.Index]
+getTableIndices :: DFDB.Transaction.MonadDatabase m => DFDB.Types.Table -> m [DFDB.Types.Index]
 getTableIndices table =
   traverse
     ( \ indexName ->
@@ -50,7 +44,7 @@ getTableIndices table =
     $ view DFDB.Types.tableIndices table
 
 -- |Simple implementation of a query planner. Check the index, and if it matches the where clause exactly use it.
-select :: (MonadState DFDB.Types.Database m, MonadError DFDB.Types.StatementFailureCode m)
+select :: DFDB.Transaction.MonadDatabase m
   => DFDB.Types.Table -> [DFDB.Types.ColumnName] -> [DFDB.Types.WhereClause]
   -> m [[DFDB.Types.Atom]]
 select table cols wheres = do
@@ -59,7 +53,7 @@ select table cols wheres = do
   maybe (selectTableScan table cols wheres) (\ index -> selectIndex table index cols wheres) tableIndexMay
 
 -- |Select using an index.
-selectIndex :: (MonadState DFDB.Types.Database m, MonadError DFDB.Types.StatementFailureCode m)
+selectIndex :: DFDB.Transaction.MonadDatabase m
   => DFDB.Types.Table -> DFDB.Types.Index -> [DFDB.Types.ColumnName] -> [DFDB.Types.WhereClause]
   -> m [[DFDB.Types.Atom]]
 selectIndex table index cols wheres = do
@@ -73,7 +67,7 @@ selectIndex table index cols wheres = do
     $ index
 
 -- |Select using a whole table scan.
-selectTableScan :: (MonadState DFDB.Types.Database m, MonadError DFDB.Types.StatementFailureCode m)
+selectTableScan :: DFDB.Transaction.MonadDatabase m
   => DFDB.Types.Table -> [DFDB.Types.ColumnName] -> [DFDB.Types.WhereClause]
   -> m [[DFDB.Types.Atom]]
 selectTableScan table cols wheres = do
@@ -89,16 +83,16 @@ selectTableScan table cols wheres = do
     . view DFDB.Types.tableRows
     $ table
 
-execute :: MonadState DFDB.Types.Database m => DFDB.Types.Statement -> m DFDB.Types.StatementResult
+execute :: DFDB.Transaction.MonadDatabase m => DFDB.Types.Statement -> m DFDB.Types.Output
 execute = \ case
   -- execute a select
-  DFDB.Types.StatementSelect cols tableName wheres -> runInner $ do
+  DFDB.Types.StatementSelect cols tableName wheres -> do
     table <- getTableOrFail tableName
     rows <- select table cols wheres
     pure . DFDB.Types.Output . unlines . map (decodeUtf8 . toStrict . encode) $ rows
 
   -- execute an insert
-  DFDB.Types.StatementInsert row@(DFDB.Types.Row atoms) tableName -> runInner $ do
+  DFDB.Types.StatementInsert row@(DFDB.Types.Row atoms) tableName -> do
     table <- getTableOrFail tableName
     let columnDefinitions = view DFDB.Types.tableDefinition table
     case length (DFDB.Types.unRow row) == length columnDefinitions of
@@ -129,7 +123,7 @@ execute = \ case
         pure $ DFDB.Types.Output "INSERT 1"
 
   -- execute a create table
-  DFDB.Types.StatementCreate tableName cols -> runInner $ do
+  DFDB.Types.StatementCreate tableName cols -> do
     use (DFDB.Types.databaseTables . at tableName) >>= \ case
       Nothing -> do
         modifying DFDB.Types.databaseTables (insertMap tableName $ DFDB.Types.Table tableName cols DFDB.Tree.empty DFDB.Types.initPrimaryKey mempty)
@@ -137,7 +131,7 @@ execute = \ case
       Just _ -> throwError $ DFDB.Types.StatementFailureCodeSyntaxError "Table already exists"
 
   -- execute a create index
-  DFDB.Types.StatementCreateIndex indexName tableName cols -> runInner $ do
+  DFDB.Types.StatementCreateIndex indexName tableName cols -> do
     table <- use (DFDB.Types.databaseTables . at tableName) >>= \ case
       Nothing -> throwError $ DFDB.Types.StatementFailureCodeSyntaxError "Table does not exist"
       Just t -> pure t
@@ -162,13 +156,13 @@ execute = \ case
       Just _ -> throwError $ DFDB.Types.StatementFailureCodeSyntaxError "Index already exists"
 
   -- execute a table drop
-  DFDB.Types.StatementDrop tableName -> runInner $ do
+  DFDB.Types.StatementDrop tableName -> do
     void $ getTableOrFail tableName
     modifying DFDB.Types.databaseTables (deleteMap tableName)
     pure $ DFDB.Types.Output "DROP TABLE"
 
   -- execute an index drop
-  DFDB.Types.StatementDropIndex indexName -> runInner $ do
+  DFDB.Types.StatementDropIndex indexName -> do
     index <- getIndexOrFail indexName
     modifying (DFDB.Types.databaseTables . at (view DFDB.Types.indexTable index) . _Just)
       ( over DFDB.Types.tableIndices (List.delete indexName)

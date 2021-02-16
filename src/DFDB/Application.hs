@@ -7,6 +7,7 @@ import System.Exit (exitSuccess)
 import DFDB.Database (emptyDatabase, execute)
 import DFDB.Persist (dbDir, loadDatabase, saveDatabase)
 import DFDB.Statement (parseStatement, runParser)
+import qualified DFDB.Transaction
 import qualified DFDB.Types
 
 greeting :: MonadIO m => m ()
@@ -64,8 +65,8 @@ dfdbRepl = do
         DFDB.Types.ParsedStatementHelp -> helpText
 
         -- some sql command
-        DFDB.Types.ParsedStatement statement -> execute statement >>= \ case
-          DFDB.Types.StatementResultSuccess output -> putStrLn $ DFDB.Types.unOutput output
-          DFDB.Types.StatementResultFailure code -> case code of
+        DFDB.Types.ParsedStatement statement -> DFDB.Transaction.runTransaction (DFDB.Transaction.Transaction (execute statement)) >>= \ case
+          Right output -> putStrLn $ DFDB.Types.unOutput output
+          Left code -> case code of
             DFDB.Types.StatementFailureCodeSyntaxError err -> putStrLn err
             DFDB.Types.StatementFailureCodeInternalError err -> putStrLn err

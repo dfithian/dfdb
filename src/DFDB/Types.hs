@@ -151,12 +151,6 @@ data StatementFailureCode
 newtype Output = Output { unOutput :: Text }
   deriving (Eq, Ord, Show, Generic)
 
--- |The result of running a statement.
-data StatementResult
-  = StatementResultSuccess Output
-  | StatementResultFailure StatementFailureCode
-  deriving (Eq, Ord, Show, Generic)
-
 makePrisms ''PrimaryKey
 makeLenses ''ColumnDefinition
 makeLenses ''Table
