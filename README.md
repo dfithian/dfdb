@@ -56,7 +56,7 @@ dfdb > :q
 - [x] indexes
 - [x] query planning
 - [x] autocommit transactions
-- [ ] transactions
+- [x] transactions
 
 ## Benchmarks
 

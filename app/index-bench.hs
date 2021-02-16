@@ -79,7 +79,7 @@ runTest table indexMay age =
       cols = [nameColumnName, ageColumnName, likesDogsColumnName]
       wheres = [DFDB.Types.WhereClause ageColumnName age]
       result = runExcept
-        . flip runStateT db
+        . flip runStateT (db, Nothing)
         . maybe (selectTableScan table cols wheres) (\ index -> selectIndex table index cols wheres)
         $ indexMay
   in case result of

@@ -99,5 +99,8 @@ parseStatement =
                      <|> (DFDB.Types.StatementCreateIndex <$ keyword "create index" <*> index <*> table <*> columnNames <* spaces <* Atto.string ";" <* Atto.takeByteString)
                      <|> (DFDB.Types.StatementDrop <$ keyword "drop table" <*> table <* spaces <* Atto.string ";" <* Atto.takeByteString)
                      <|> (DFDB.Types.StatementDropIndex <$ keyword "drop index" <*> index <* spaces <* Atto.string ";" <* Atto.takeByteString)
+                     <|> (DFDB.Types.StatementBegin <$ keyword "begin")
+                     <|> (DFDB.Types.StatementCommit <$ keyword "commit")
+                     <|> (DFDB.Types.StatementRollback <$ keyword "rollback")
                 )
         )

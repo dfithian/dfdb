@@ -1,7 +1,8 @@
 module DFDB.Application where
 
 import ClassyPrelude
-import Control.Monad.State (execStateT, get)
+import Control.Lens (use)
+import Control.Monad.State (execStateT)
 import System.Exit (exitSuccess)
 
 import DFDB.Database (emptyDatabase, execute)
@@ -43,11 +44,11 @@ dfdbRepl = do
       putStrLn $ "Couldn't load database (" <> pack err <> "), creating a new one"
       pure emptyDatabase
 
-  void . flip execStateT db . forever $ do
+  void . flip execStateT (DFDB.Types.TransactionalDatabase db Nothing) . forever $ do
     replPrompt
     input <- DFDB.Types.Command <$> liftIO getLine
     when (input `elem` quitCommands) $ do
-      currentDb <- get
+      currentDb <- use DFDB.Types.transactionalDatabaseLastSavepoint
       saveDatabase dbDir currentDb
       liftIO exitSuccess
     case runParser parseStatement input of

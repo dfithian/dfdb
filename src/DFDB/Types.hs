@@ -121,6 +121,19 @@ data Database = Database
   }
   deriving (Eq, Ord, Show, Generic)
 
+data TransactionStatus
+  = TransactionStatusBegin
+  | TransactionStatusAborted
+  | TransactionStatusCommit
+  | TransactionStatusRollback
+  deriving (Eq, Ord, Show, Generic)
+
+data TransactionalDatabase = TransactionalDatabase
+  { _transactionalDatabaseLastSavepoint :: Database
+  , _transactionalDatabaseInner         :: Maybe (TransactionStatus, Database)
+  }
+  deriving (Eq, Ord, Show, Generic)
+
 -- |A where filter.
 data WhereClause = WhereClause
   { _whereClauseColumn     :: ColumnName
@@ -139,6 +152,9 @@ data Statement
   | StatementCreateIndex IndexName TableName [ColumnName]
   | StatementDrop TableName
   | StatementDropIndex IndexName
+  | StatementBegin
+  | StatementCommit
+  | StatementRollback
   deriving (Eq, Ord, Show, Generic)
 
 -- |A statement failed to execute.
@@ -156,6 +172,7 @@ makeLenses ''ColumnDefinition
 makeLenses ''Table
 makeLenses ''Index
 makeLenses ''Database
+makeLenses ''TransactionalDatabase
 makeLenses ''WhereClause
 
 instance ToJSON AtomType where
