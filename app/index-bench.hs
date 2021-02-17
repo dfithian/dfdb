@@ -5,7 +5,7 @@ import Control.Monad.State (runStateT)
 import Criterion.Main (bench, bgroup, defaultMain, env, nf)
 import Test.QuickCheck (Gen, arbitrary, choose, elements, generate, listOf1, vectorOf)
 
-import DFDB.Database (selectIndex, selectTableScan)
+import DFDB.Database (selectIndex, selectPK, selectTableScan)
 import qualified DFDB.Tree
 import qualified DFDB.Types
 
@@ -62,15 +62,16 @@ arbitraryBool = DFDB.Types.AtomBool <$> arbitrary
 
 -- |Generate `n` rows of the `people` table, index by age, and return a row that's in the data set to use to benchmark a
 -- query.
-genData :: Int -> IO (DFDB.Types.Table, DFDB.Types.Index, (DFDB.Types.Atom, DFDB.Types.Atom, DFDB.Types.Atom))
+genData :: Int -> IO (DFDB.Types.Table, DFDB.Types.Index, DFDB.Types.PrimaryKey, (DFDB.Types.Atom, DFDB.Types.Atom, DFDB.Types.Atom))
 genData n = generate $ do
   let genTraits = (,,) <$> arbitraryString <*> arbitraryInt <*> arbitraryBool
       toPerson (name, age, likesDogs) = DFDB.Types.Row [name, age, likesDogs]
   oneTrait <- genTraits
+  pkey <- DFDB.Types.PrimaryKey <$> choose (1, n - 1)
   allTraits <- (oneTrait:) <$> vectorOf n genTraits
   let peopleByPKey = DFDB.Tree.mapFromList $ zip (DFDB.Types.PrimaryKey <$> [1..]) (map toPerson allTraits)
       peopleByAge = DFDB.Tree.mapFromListWith (<>) $ flip map allTraits $ \ traits@(_, age, _) -> ([age], [toPerson traits])
-  pure (peopleTable peopleByPKey, ageIndex peopleByAge, oneTrait)
+  pure (peopleTable peopleByPKey, ageIndex peopleByAge, pkey, oneTrait)
 
 -- |Run a test. If the index is provided, query using the index. Filter using the provided atom in the `where` clause.
 runTest :: DFDB.Types.Table -> Maybe DFDB.Types.Index -> DFDB.Types.Atom -> ()
@@ -86,18 +87,34 @@ runTest table indexMay age =
     Left err -> error $ "Got error " <> show err <> " with database " <> show db
     Right _ -> ()
 
+-- |Run a primary key test.
+runTestPK :: DFDB.Types.Table -> DFDB.Types.PrimaryKey -> ()
+runTestPK table pkey =
+  let db = DFDB.Types.Database (singletonMap peopleTableName table) mempty
+      cols = [nameColumnName, ageColumnName, likesDogsColumnName]
+      result = runExcept
+        . flip runStateT (db, Nothing)
+        . selectPK table cols
+        $ pkey
+  in case result of
+    Left err -> error $ "Got error " <> show err <> " with database " <> show db
+    Right _ -> ()
+
 main :: IO ()
 main = defaultMain
-  [ env (genData 10000) $ \ ~(table, index, (_, age, _)) -> bgroup "select - 10000"
-      [ bench "no index" $ nf (runTest table Nothing) age
+  [ env (genData 10000) $ \ ~(table, index, pkey, (_, age, _)) -> bgroup "select - 10000"
+      [ bench "by pk" $ nf (runTestPK table) pkey
+      , bench "no index" $ nf (runTest table Nothing) age
       , bench "using index" $ nf (runTest table $ Just index) age
       ]
-  , env (genData 100000) $ \ ~(table, index, (_, age, _)) -> bgroup "select - 100000"
-      [ bench "no index" $ nf (runTest table Nothing) age
+  , env (genData 100000) $ \ ~(table, index, pkey, (_, age, _)) -> bgroup "select - 100000"
+      [ bench "by pk" $ nf (runTestPK table) pkey
+      , bench "no index" $ nf (runTest table Nothing) age
       , bench "using index" $ nf (runTest table $ Just index) age
       ]
-  , env (genData 200000) $ \ ~(table, index, (_, age, _)) -> bgroup "select - 200000"
-      [ bench "no index" $ nf (runTest table Nothing) age
+  , env (genData 200000) $ \ ~(table, index, pkey, (_, age, _)) -> bgroup "select - 200000"
+      [ bench "by pk" $ nf (runTestPK table) pkey
+      , bench "no index" $ nf (runTest table Nothing) age
       , bench "using index" $ nf (runTest table $ Just index) age
       ]
   ]

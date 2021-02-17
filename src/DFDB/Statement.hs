@@ -94,6 +94,7 @@ parseStatement =
   (DFDB.Types.ParsedStatementHelp <$ keyword "help")
     <|> ( DFDB.Types.ParsedStatement
             <$> ( (DFDB.Types.StatementSelect <$ keyword "select" <*> columnNames <*> table <*> (keyword "where" *> wheres) <* spaces <* Atto.string ";" <* Atto.takeByteString)
+                     <|> (DFDB.Types.StatementSelectPK <$ keyword "select" <*> columnNames <*> table <*> (keyword "id" *> (DFDB.Types.PrimaryKey <$> digit)) <* spaces <* Atto.string ";" <* Atto.takeByteString)
                      <|> (DFDB.Types.StatementInsert <$ keyword "insert" <*> row <*> table <* spaces <* Atto.string ";" <* Atto.takeByteString)
                      <|> (DFDB.Types.StatementCreate <$ keyword "create table" <*> table <*> columnDefinitions <* spaces <* Atto.string ";" <* Atto.takeByteString)
                      <|> (DFDB.Types.StatementCreateIndex <$ keyword "create index" <*> index <*> table <*> columnNames <* spaces <* Atto.string ";" <* Atto.takeByteString)

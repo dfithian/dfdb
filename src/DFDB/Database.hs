@@ -54,6 +54,18 @@ select table cols wheres = do
   tableIndexMay <- headMay . filter ((==) whereColumns . view DFDB.Types.indexColumns) <$> getTableIndices table
   maybe (selectTableScan table cols wheres) (\ index -> selectIndex table index cols wheres) tableIndexMay
 
+selectPK :: DFDB.Transaction.MonadDatabase m
+  => DFDB.Types.Table -> [DFDB.Types.ColumnName] -> DFDB.Types.PrimaryKey
+  -> m [[DFDB.Types.Atom]]
+selectPK table cols pkey = do
+  columnIndices <- getColumnIndices table cols
+  pure
+    . maybeToList
+    . map (\ (DFDB.Types.Row atoms) -> map ((!!) atoms) columnIndices)
+    . DFDB.Tree.lookup pkey
+    . view DFDB.Types.tableRows
+    $ table
+
 -- |Select using an index.
 selectIndex :: DFDB.Transaction.MonadDatabase m
   => DFDB.Types.Table -> DFDB.Types.Index -> [DFDB.Types.ColumnName] -> [DFDB.Types.WhereClause]
@@ -91,6 +103,12 @@ execute = \ case
   DFDB.Types.StatementSelect cols tableName wheres -> do
     table <- getTableOrFail tableName
     rows <- select table cols wheres
+    pure . DFDB.Types.Output . unlines . map (decodeUtf8 . toStrict . encode) $ rows
+
+  -- execute a select by primary key
+  DFDB.Types.StatementSelectPK cols tableName pkey -> do
+    table <- getTableOrFail tableName
+    rows <- selectPK table cols pkey
     pure . DFDB.Types.Output . unlines . map (decodeUtf8 . toStrict . encode) $ rows
 
   -- execute an insert

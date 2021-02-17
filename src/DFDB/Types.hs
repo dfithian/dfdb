@@ -147,6 +147,7 @@ data WhereClause = WhereClause
 data Statement
   = StatementSelect [ColumnName] TableName [WhereClause]
   -- ^ Where clauses are AND.
+  | StatementSelectPK [ColumnName] TableName PrimaryKey
   | StatementInsert Row TableName
   | StatementCreate TableName [ColumnDefinition]
   | StatementCreateIndex IndexName TableName [ColumnName]
